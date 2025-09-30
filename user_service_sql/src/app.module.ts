@@ -5,6 +5,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { Usuario } from './entity/user.entity';
+import { ClientsModule, Transport } from '@nestjs/microservices'; 
 
 @Module({
   imports: [
@@ -28,6 +29,20 @@ import { Usuario } from './entity/user.entity';
       secret: 'MI_SECRETO_SUPER_SEGURO', // usa tu variable de entorno en producción
       signOptions: { expiresIn: '1h' },   // duración del token
     }),
+
+    // <-- Cliente RabbitMQ para emitir eventos
+    ClientsModule.register([
+      {
+        name: 'USER_SERVICE_MONGO', // este es el microservicio Mongo
+        transport: Transport.RMQ,
+        options: {
+          urls: ['amqp://localhost:5672'], // tu RabbitMQ
+          queue: 'user_created_queue',
+          queueOptions: { durable: true },
+        },
+      },
+    ]),
+
   ],
   controllers: [AppController],
   providers: [AppService],

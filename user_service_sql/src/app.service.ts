@@ -1,9 +1,10 @@
-import { Injectable, UnauthorizedException, NotFoundException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, NotFoundException, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Usuario } from './entity/user.entity';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
+import { ClientProxy } from '@nestjs/microservices';
 
 @Injectable()
 export class AppService {
@@ -11,6 +12,8 @@ export class AppService {
     @InjectRepository(Usuario)
     private readonly courseRepo: Repository<Usuario>,
     private readonly jwtService: JwtService,
+    @Inject('USER_SERVICE_MONGO') private readonly client: ClientProxy, // <-- RabbitMQ Client
+    
   ) {}
 
   // Obtener todos los usuarios
@@ -27,11 +30,23 @@ export class AppService {
 
   // Crear usuario con hash de contraseña
   async createUser(data: Partial<Usuario>): Promise<Usuario> {
-    const salt = await bcrypt.genSalt();
-    const hash = await bcrypt.hash(data.contrasena, salt);
-    const user = this.courseRepo.create({ ...data, contrasena: hash });
-    return this.courseRepo.save(user);
-  }
+  // Hasheamos la contraseña
+  const salt = await bcrypt.genSalt();
+  const hash = await bcrypt.hash(data.contrasena, salt);
+
+  // Creamos el usuario
+  const user = this.courseRepo.create({ ...data, contrasena: hash });
+  const savedUser = await this.courseRepo.save(user);
+
+  // Emitimos evento a RabbitMQ para que Mongo cree perfil
+  await this.client.emit('user_created', {
+    id_unico: savedUser.unique_id, // <-- id único de SQL
+    nombre: savedUser.nombre,
+    correo_electronico: savedUser.correo_electronico,
+  });
+
+  return savedUser;
+}
 
   // Actualizar usuario
   async updateUser(id: number, data: Partial<Usuario>): Promise<Usuario> {
