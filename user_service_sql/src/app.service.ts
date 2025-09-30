@@ -30,19 +30,19 @@ export class AppService {
 
   // Crear usuario con hash de contraseña
   async createUser(data: Partial<Usuario>): Promise<Usuario> {
-  // Hasheamos la contraseña
-  const salt = await bcrypt.genSalt();
-  const hash = await bcrypt.hash(data.contrasena, salt);
+    // Hasheamos la contraseña
+    const salt = await bcrypt.genSalt();
+    const hash = await bcrypt.hash(data.contrasena, salt);
 
-  // Creamos el usuario
-  const user = this.courseRepo.create({ ...data, contrasena: hash });
-  const savedUser = await this.courseRepo.save(user);
+    // Creamos el usuario
+    const user = this.courseRepo.create({ ...data, contrasena: hash });
+    const savedUser = await this.courseRepo.save(user);
 
-  // Emitimos evento a RabbitMQ para que Mongo cree perfil
-  await this.client.emit('user_created', {
-    id_unico: savedUser.unique_id, // <-- id único de SQL
-    nombre: savedUser.nombre,
-    correo_electronico: savedUser.correo_electronico,
+    // Emitimos evento a RabbitMQ para que Mongo cree perfil
+    await this.client.emit('user_created', {
+      id_unico: savedUser.unique_id, // <-- id único de SQL
+      nombre: savedUser.nombre,
+      correo_electronico: savedUser.correo_electronico,
   });
 
   return savedUser;

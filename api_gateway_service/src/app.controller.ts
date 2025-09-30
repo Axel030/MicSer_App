@@ -5,7 +5,7 @@ import { get } from 'http';
 @Controller()
 export class AppController {
   constructor(
-    @Inject('USER_SERVICE') private readonly Loginclient: ClientProxy,
+    @Inject('USER_SERVICE_SQL') private readonly Loginclient: ClientProxy,
     @Inject('USER_SERVICE_MONGO') private readonly DatosClient: ClientProxy,
   ) {}
   //Servicio de autenticacion y gestion de usuarios (user_service_sql)
