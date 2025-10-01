@@ -2,12 +2,14 @@ import { Controller, Get, Post, Put, Delete, Inject, Body, Param  } from '@nestj
 import { ClientProxy } from '@nestjs/microservices';
 import { get } from 'http';
 
+
 @Controller()
 export class AppController {
   constructor(
     @Inject('USER_SERVICE_SQL') private readonly Loginclient: ClientProxy,
     @Inject('USER_SERVICE_MONGO') private readonly DatosClient: ClientProxy,
   ) {}
+  
   //Servicio de autenticacion y gestion de usuarios (user_service_sql)
   // Login
   @Post('login')
@@ -20,6 +22,13 @@ export class AppController {
   getAllUsers() {
     return this.Loginclient.send({ cmd: 'get_users' }, {});
   }
+
+
+// Obtener usuario con su perfil (SQL + Mongo)
+@Get('users/:id/with-profile')
+getUserWithProfile(@Param('id') id: string) {
+  return this.Loginclient.send({ cmd: 'get_user_with_profile' }, { id: Number(id) });
+}
 
   // Crear un nuevo usuario
   @Post('users')
@@ -69,6 +78,11 @@ export class AppController {
   updateProfile(@Param('id') id: string, @Body() body: any) {
     return this.DatosClient.send({ cmd: 'update_profile' }, { id, ...body });
   }
+
+  @Put('profiles/unique/:id_unico')
+updateProfileByUniqueId(@Param('id_unico') id_unico: string, @Body() body: any) {
+  return this.DatosClient.send({ cmd: 'update_profile_by_unique_id' }, { id_unico, ...body });
+}
 
   // Eliminar perfil
   @Delete('profiles/:id')

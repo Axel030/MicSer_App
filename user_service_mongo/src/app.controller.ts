@@ -31,13 +31,30 @@ export class AppController {
     return this.appService.findByIdUnico(payload.id_unico);
   }
 
+  // Actualizar perfil (id viene directo + resto de datos planos)
   @MessagePattern({ cmd: 'update_profile' })
-  async update(@Payload() payload: { id: string; data: Partial<PerfilUsuario> }) {
-    return this.appService.update(payload.id, payload.data);
+  async update(@Payload() payload: { id: string; [key: string]: any }) {
+    const { id, ...data } = payload;
+    return this.appService.update(id, data);
   }
 
+  // Actualizar por id_unico
+@MessagePattern({ cmd: 'update_profile_by_unique_id' })
+async updateByUniqueId(@Payload() payload: { id_unico: string; [key: string]: any }) {
+  const { id_unico, ...data } = payload;
+  return this.appService.updateByUniqueId(id_unico, data);
+}
+
+  // Eliminar perfil
   @MessagePattern({ cmd: 'delete_profile' })
-  async delete(@Payload() id: string) {
-    return this.appService.delete(id);
+  async delete(@Payload() payload: { id: string }) {
+    return this.appService.delete(payload.id);
   }
+
+// Eliminar por id_unico
+  @MessagePattern({ cmd: 'delete_profile_by_unique_id' })
+  async deleteByUniqueId(@Payload() payload: { id_unico: string }) {
+    return this.appService.deleteByUniqueId(payload.id_unico);
+  }
+  
 }

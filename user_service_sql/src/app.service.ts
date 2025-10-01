@@ -5,6 +5,8 @@ import { Usuario } from './entity/user.entity';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { ClientProxy } from '@nestjs/microservices';
+import { firstValueFrom } from 'rxjs';
+
 
 @Injectable()
 export class AppService {
@@ -20,6 +22,22 @@ export class AppService {
   findAll(): Promise<Usuario[]> {
     return this.courseRepo.find();
   }
+
+  
+// app.service.ts (user_service_sql) // Obtener usuario sql por ID con perfil de Mongo
+async getUserWithProfile(id: number) {
+  const user = await this.courseRepo.findOneBy({ id });
+  if (!user) throw new NotFoundException('Usuario no encontrado');
+
+  const profile = await firstValueFrom(
+    this.client.send({ cmd: 'get_profile_by_id_unico' }, { id_unico: user.unique_id }),
+  );
+
+  return {
+    ...user,
+    perfil: profile || null,
+  };
+}
 
   // Buscar usuario por correo
   async findByEmail(correo_electronico: string): Promise<Usuario> {

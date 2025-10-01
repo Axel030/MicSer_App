@@ -12,6 +12,13 @@ export class AppController {
   findAll(): Promise<Usuario[]> {
     return this.appService.findAll();
   }
+  
+// Obtener usuario SQL + perfil de Mongo
+@MessagePattern({ cmd: 'get_user_with_profile' })
+async getUserWithProfile(@Payload() data: { id: number }) {
+  return this.appService.getUserWithProfile(data.id);
+}
+
 
   // Crear un nuevo usuario
   @MessagePattern({ cmd: 'create_user' })

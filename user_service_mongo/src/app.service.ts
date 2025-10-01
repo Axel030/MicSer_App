@@ -21,6 +21,7 @@ export class AppService {
     const newPerfil = new this.perfilUsuarioModel(perfilData);
     return newPerfil.save();
   }
+  
 
   
   // Actualizar perfil por id
@@ -37,4 +38,19 @@ export class AppService {
   async findByIdUnico(id_unico: string): Promise<PerfilUsuario | null> {
     return this.perfilUsuarioModel.findOne({ id_unico }).exec();
   }
+/////////////////////////////////////////////////////////////////////////////////////
+  // Actualizar por id_unico
+async updateByUniqueId(id_unico: string, data: Partial<PerfilUsuario>): Promise<PerfilUsuario | null> {
+  return this.perfilUsuarioModel.findOneAndUpdate({ id_unico }, data, { new: true }).exec();
+}
+
+// Eliminar por id_unico
+async deleteByUniqueId(id_unico: string): Promise<PerfilUsuario | null> {
+  return this.perfilUsuarioModel.findOneAndDelete({ id_unico }).exec();
+}
+
+// Buscar perfil por id_unico
+async findByIdUnico1(id_unico: string): Promise<PerfilUsuario | null> {
+  return this.perfilUsuarioModel.findOne({ id_unico }).exec();
+}
 }
