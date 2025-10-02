@@ -12,10 +12,11 @@ export class AppController {
   
   //Servicio de autenticacion y gestion de usuarios (user_service_sql)
   // Login
-  @Post('login')
-  login(@Body() body: { username: string; password: string }) {
+ @Post('login')
+  login(@Body() body: { correo_electronico: string; contrasena: string }) {
     return this.Loginclient.send({ cmd: 'login' }, body);
-  }
+}
+
 
   // Obtener todos los usuarios
   @Get('users')

@@ -89,12 +89,30 @@ async getUserWithProfile(id: number) {
   }
 
   // Login
-  async login(correo_electronico: string, contrasena: string) {
-    const user = await this.findByEmail(correo_electronico);
-    const isMatch = await bcrypt.compare(contrasena, user.contrasena);
-    if (!isMatch) throw new UnauthorizedException('Contraseña incorrecta');
+  // app.service.ts
+async login(correo: string, contrasena: string) {
+  try {
+    const usuario = await this.courseRepo.findOne({
+      where: { correo_electronico: correo },
+    });
 
-    const payload = { sub: user.id, correo_electronico: user.correo_electronico };
-    return { access_token: this.jwtService.sign(payload) };
+    if (!usuario) {
+      return { status: 'error', message: 'Usuario no encontrado' };
+    }
+
+    const contrasenaValida = await bcrypt.compare(contrasena, usuario.contrasena);
+    if (!contrasenaValida) {
+      return { status: 'error', message: 'Contraseña incorrecta' };
+    }
+
+    const payload = { sub: usuario.id, correo_electronico: usuario.correo_electronico };
+
+    return { status: 'success', message: 'Bienvenido de nuevo', access_token: this.jwtService.sign(payload) };
+  } catch (error) {
+    console.error(error);
+    return { status: 'error', message: 'Ocurrió un error interno' };
   }
+}
+
+
 }
