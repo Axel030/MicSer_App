@@ -6,6 +6,7 @@ export class AppController {
   constructor(
     @Inject('USER_SERVICE_SQL') private readonly Loginclient: ClientProxy,
     @Inject('USER_SERVICE_MONGO') private readonly DatosClient: ClientProxy,
+    @Inject('AUTH_SERVICE') private readonly AuthClient: ClientProxy,
   ) {}
 
   // =========================
@@ -93,4 +94,21 @@ export class AppController {
   deleteProfile(@Param('id') id: string) {
     return this.DatosClient.send({ cmd: 'delete_profile' }, { id });
   }
+
+   // =========================
+  //       AUTENTICACIÓN
+  // =========================
+
+  // Endpoint para enviar OTP
+  @Post('auth/send-otp')
+  sendOtp(@Body() body: { channel: 'email' | 'sms'; target: string }) {
+    return this.AuthClient.send({ cmd: 'send_otp' }, body);
+  }
+
+  // Endpoint para verificar OTP
+  @Post('auth/verify-otp')
+  verifyOtp(@Body() body: { code: string; salt: string; digest: string; expiresAt: number }) {
+    return this.AuthClient.send({ cmd: 'verify_otp' }, body);
+  }
+
 }

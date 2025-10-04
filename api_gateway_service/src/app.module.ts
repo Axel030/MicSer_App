@@ -24,6 +24,15 @@ import { AppService } from './app.service';
       queueOptions: { durable: true },
     },
   },
+  {
+    name: 'AUTH_SERVICE', // 👈 Nuevo microservicio
+    transport: Transport.RMQ,
+    options: {
+      urls: ['amqp://localhost:5672'],
+      queue: 'auth_queue', // 👈 asegúrate de usar el mismo nombre que en authentication_service/main.ts
+      queueOptions: { durable: true },
+    },
+  },
 ]),
   ],
   controllers: [AppController],

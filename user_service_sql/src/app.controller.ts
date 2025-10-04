@@ -46,7 +46,6 @@ async getUserWithProfile(@Payload() data: { id: number }) {
   }
 
   // Login
-  // Login
   @MessagePattern({ cmd: 'login' })
   async login(@Payload() data: { correo_electronico: string; contrasena: string }) {
     return this.appService.login(data.correo_electronico, data.contrasena);
