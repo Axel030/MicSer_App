@@ -1,4 +1,4 @@
-import { Controller } from '@nestjs/common';
+import { Controller, Post, Body } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { AppService } from './app.service';
 import { Usuario } from './entity/user.entity';
@@ -13,11 +13,17 @@ export class AppController {
     return this.appService.findAll();
   }
   
-// Obtener usuario SQL + perfil de Mongo
-@MessagePattern({ cmd: 'get_user_with_profile' })
-async getUserWithProfile(@Payload() data: { id: number }) {
-  return this.appService.getUserWithProfile(data.id);
-}
+  // Obtener usuario SQL + perfil de Mongo
+  @MessagePattern({ cmd: 'get_user_with_profile' })
+  async getUserWithProfile(@Payload() data: { id: number }) {
+    return this.appService.getUserWithProfile(data.id);
+  }
+
+  // Actualizar perfil de usuario en Mongo
+  @Post('update-profile')
+  async updateProfile(@Body() data: { id_unico: string; [key: string]: any }) {
+    return this.appService.updateUserProfile(data);
+  }
 
 
   // Crear un nuevo usuario
