@@ -15,16 +15,7 @@ export class AppController {
   }
 
   // Los demás métodos sí pueden seguir con @MessagePattern (son request/response)
-  @MessagePattern({ cmd: 'get_profiles' })
-  async findAll(): Promise<PerfilUsuario[]> {
-    return this.appService.findAll();
-  }
 
-  @MessagePattern({ cmd: 'create_profile' })
-  async create(@Payload() perfilData: Partial<PerfilUsuario>) {
-    if (!perfilData.id_unico) throw new Error('El id_unico es obligatorio');
-    return this.appService.create(perfilData);
-  }
 
   @MessagePattern({ cmd: 'get_profile_by_id_unico' })
   async findByIdUnico(@Payload() payload: { id_unico: string }) {

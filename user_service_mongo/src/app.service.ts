@@ -11,21 +11,15 @@ export class AppService {
     private readonly perfilUsuarioModel: Model<PerfilUsuarioDocument>,
   ) {}
 
-  // Obtener todos los perfiles
-  async findAll(): Promise<PerfilUsuario[]> {
-    return this.perfilUsuarioModel.find().exec();
-  }
 
    // 🔹 Crear perfil cuando SQL lo emite
- async create(data: Partial<PerfilUsuario>) {
+  async create(data: Partial<PerfilUsuario>) {
     const perfil = new this.perfilUsuarioModel({
       id_unico: data.id_unico,
     });
     return perfil.save();
   }
-  
 
-  
   // Actualizar perfil por id
   async update(id: string, data: Partial<PerfilUsuario>): Promise<PerfilUsuario | null> {
     return this.perfilUsuarioModel.findByIdAndUpdate(id, data, { new: true }).exec();

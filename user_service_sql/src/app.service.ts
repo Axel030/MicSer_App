@@ -18,10 +18,6 @@ export class AppService {
     
   ) {}
 
-  // Obtener todos los usuarios
-  findAll(): Promise<Usuario[]> {
-    return this.courseRepo.find();
-  }
 
   
 // app.service.ts (user_service_sql) // Obtener usuario sql por ID con perfil de Mongo
@@ -38,13 +34,6 @@ async getUserWithProfile(id: number) {
     perfil: profile || null,
   };
 }
-
-  // Buscar usuario por correo
-  async findByEmail(correo_electronico: string): Promise<Usuario> {
-    const user = await this.courseRepo.findOneBy({ correo_electronico });
-    if (!user) throw new NotFoundException('Usuario no encontrado');
-    return user;
-  }
 
   // Crear usuario con hash de contraseña
   async createUser(data: Partial<Usuario>): Promise<Usuario> {

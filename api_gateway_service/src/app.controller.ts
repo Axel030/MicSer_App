@@ -21,18 +21,6 @@ export class AppController {
     return this.Loginclient.send({ cmd: 'login' }, body);
   }
 
-  // Obtener todos los usuarios
-  @Get('users')
-  getAllUsers() {
-    return this.Loginclient.send({ cmd: 'get_users' }, {});
-  }
-
-  // Obtener usuario por correo
-  @Get('users/email/:correo_electronico')
-  findByEmail(@Param('correo_electronico') correo_electronico: string) {
-    return this.Loginclient.send({ cmd: 'find_by_email' }, { correo_electronico });
-  }
-
   // Obtener usuario con su perfil (SQL + Mongo)
   @Get('users/:id/with-profile')
   getUserWithProfile(@Param('id') id: string) {
@@ -61,22 +49,10 @@ export class AppController {
   //       PERFILES (Mongo)
   // =========================
 
-  // Obtener todos los perfiles
-  @Get('profiles')
-  getAllProfiles() {
-    return this.DatosClient.send({ cmd: 'get_profiles' }, {});
-  }
-
   // Obtener perfil por id_unico
   @Get('profiles/:id_unico')
   getProfileByIdUnico(@Param('id_unico') id_unico: string) {
     return this.DatosClient.send({ cmd: 'get_profile_by_id_unico' }, { id_unico });
-  }
-
-  // Crear un perfil
-  @Post('profiles')
-  createProfile(@Body() body: any) {
-    return this.DatosClient.send({ cmd: 'create_profile' }, body);
   }
 
   // Actualizar perfil por id
@@ -119,7 +95,6 @@ export class AppController {
 
     return { message: 'OTP enviado', correo: body.correo_electronico };
   }
-
 
   @Post('register/confirm')
   async registerConfirm(@Body() body: { correo_electronico: string; code: string }) {
