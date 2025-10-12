@@ -1,4 +1,4 @@
-import { Controller } from '@nestjs/common';
+﻿import { Controller } from '@nestjs/common';
 import { EventPattern, Payload, MessagePattern } from '@nestjs/microservices';
 import { AppService } from './app.service';
 import { PerfilUsuario } from './schemas/usuario.schema';
@@ -7,14 +7,14 @@ import { PerfilUsuario } from './schemas/usuario.schema';
 export class AppController {
   constructor(private readonly appService: AppService) {}
 
-  // 👇 Esto escucha los eventos emitidos desde SQL
+  // ðŸ‘‡ Esto escucha los eventos emitidos desde SQL
   @EventPattern('user_created')
   async handleUserCreated(@Payload() data: { id_unico: string }) {
-    console.log('📥 Nuevo perfil creado en Mongo con id_unico:', data.id_unico);
+    console.log('ðŸ“¥ Nuevo perfil creado en Mongo con id_unico:', data.id_unico);
     return this.appService.create({ id_unico: data.id_unico });
   }
 
-  // Los demás métodos sí pueden seguir con @MessagePattern (son request/response)
+  // Los demÃ¡s mÃ©todos sÃ­ pueden seguir con @MessagePattern (son request/response)
 
 
   @MessagePattern({ cmd: 'get_profile_by_id_unico' })
@@ -30,7 +30,7 @@ export class AppController {
   }
 
   // Actualizar por id_unico
-// 🔹 Escucha solicitudes de actualización de perfil
+// ðŸ”¹ Escucha solicitudes de actualizaciÃ³n de perfil
   @MessagePattern({ cmd: 'update_profile_by_unique_id' })
 async updateByUniqueId(@Payload() payload: { id_unico: string; [key: string]: any }) {
   return this.appService.updateProfileByUniqueId(payload);
@@ -52,4 +52,21 @@ async updateByUniqueId(@Payload() payload: { id_unico: string; [key: string]: an
 
   
   
+  // documentos: guarda una url
+  @MessagePattern({ cmd: 'docs.save.one' })
+  async docsSaveOne(@Payload() data: { id_unico: string, slot: 'dpi'|'foto_dpi'|'penal'|'policial', url: string }) {
+    return this.appService.save_doc_one(data)
+  }
+
+  // documentos: guarda varias urls
+  @MessagePattern({ cmd: 'docs.save.many' })
+  async docsSaveMany(@Payload() data: { id_unico: string, items: { slot: 'dpi'|'foto_dpi'|'penal'|'policial', url: string }[] }) {
+    return this.appService.save_doc_many(data)
+  }
+
+  // documentos: obtiene todas las urls
+  @MessagePattern({ cmd: 'docs.get.all' })
+  async docsGetAll(@Payload() data: { id_unico: string }) {
+    return this.appService.get_docs(data.id_unico)
+  }
 }

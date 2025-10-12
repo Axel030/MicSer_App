@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Inject, Body, Param } from '@nestjs/common';
+﻿import { Controller, Get, Post, Put, Delete, Inject, Body, Param } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { firstValueFrom } from 'rxjs';
 
@@ -82,18 +82,18 @@ export class AppController {
 
   
    // =========================
-  //       AUTENTICACIÓN
+  //       AUTENTICACIÃ“N
   // =========================
 
   // api_gateway_service/app.controller.ts
   @Post('register/init')
   async registerInit(@Body() body: any) {
-    // 1️⃣ Guardar los datos temporales en memoria o base temporal (Map, Redis, etc.)
+    // 1ï¸âƒ£ Guardar los datos temporales en memoria o base temporal (Map, Redis, etc.)
     // ejemplo en memoria:
     const tempId = body.correo_electronico; // key simple
     this.tempUsers.set(tempId, body);
 
-    // 2️⃣ Enviar OTP al correo
+    // 2ï¸âƒ£ Enviar OTP al correo
     const result = await firstValueFrom(
       this.AuthClient.send({ cmd: 'send_otp' }, { channel: 'email', target: body.correo_electronico })
     );
@@ -103,25 +103,25 @@ export class AppController {
 
   @Post('register/confirm')
   async registerConfirm(@Body() body: { correo_electronico: string; code: string }) {
-    // 1️⃣ Verificar OTP
+    // 1ï¸âƒ£ Verificar OTP
     const isValid = await firstValueFrom(
       this.AuthClient.send({ cmd: 'verify_otp' }, { code: body.code })
     );
 
     if (!isValid.valid) {
-      return { status: 'error', message: 'OTP inválido o expirado' };
+      return { status: 'error', message: 'OTP invÃ¡lido o expirado' };
     }
 
-    // 2️⃣ Recuperar datos temporales
+    // 2ï¸âƒ£ Recuperar datos temporales
     const userData = this.tempUsers.get(body.correo_electronico);
     if (!userData) return { status: 'error', message: 'Datos de registro no encontrados' };
 
-    // 3️⃣ Enviar evento a user_service_sql para crear usuario
+    // 3ï¸âƒ£ Enviar evento a user_service_sql para crear usuario
     const createdUser = await firstValueFrom(
       this.Loginclient.send({ cmd: 'create_user' }, userData)
     );
 
-    // 4️⃣ Limpiar memoria temporal
+    // 4ï¸âƒ£ Limpiar memoria temporal
     this.tempUsers.delete(body.correo_electronico);
 
     return createdUser;
@@ -133,17 +133,17 @@ export class AppController {
   //                 EMPRESAS Y EMPLEOS (SQL)
   // =====================================================
 
-  // Crear compañía (solo SQL)
+  // Crear compaÃ±Ã­a (solo SQL)
   @Post('enterprise/companyUser')
   async createEnterpriseCompany(@Body() body: any) {
     const sqlCompany = await firstValueFrom(
       this.JobsSQLClient.send({ cmd: 'create_company' }, body)
     );
 
-    // ⚠️ Ya NO se envía nada a Mongo aquí.
-    // El evento 'enterprise_company_created' lo manejará automáticamente el servicio Mongo.
+    // âš ï¸ Ya NO se envÃ­a nada a Mongo aquÃ­.
+    // El evento 'enterprise_company_created' lo manejarÃ¡ automÃ¡ticamente el servicio Mongo.
 
-    return { ...sqlCompany, message: 'Compañía creada correctamente' };
+    return { ...sqlCompany, message: 'CompaÃ±Ã­a creada correctamente' };
   }
 
   // Crear empleo (solo SQL)
@@ -153,8 +153,8 @@ export class AppController {
       this.JobsSQLClient.send({ cmd: 'create_enterprise_job' }, body)
     );
 
-    // ⚠️ Ya NO se manda manualmente a Mongo.
-    // El evento 'enterprise_job_created' será escuchado por el microservicio Mongo.
+    // âš ï¸ Ya NO se manda manualmente a Mongo.
+    // El evento 'enterprise_job_created' serÃ¡ escuchado por el microservicio Mongo.
 
     return { ...sqlJob, message: 'Empleo creado correctamente' };
   }
@@ -169,5 +169,19 @@ export class AppController {
     return updatedDetail;
   }
 
-}
+  // documentos endpoints
+  @post('documents/save-one')
+  saveDocOne(@body() body: { id_unico: string, slot: 'dpi'|'foto_dpi'|'penal'|'policial', url: string }) {
+    return this.DatosClient.send({ cmd: 'docs.save.one' }, body)
+  }
 
+  @post('documents/save-many')
+  saveDocMany(@body() body: { id_unico: string, items: { slot: 'dpi'|'foto_dpi'|'penal'|'policial', url: string }[] }) {
+    return this.DatosClient.send({ cmd: 'docs.save.many' }, body)
+  }
+
+  @get('documents/:id_unico')
+  getDocs(@param('id_unico') id_unico: string) {
+    return this.DatosClient.send({ cmd: 'docs.get.all' }, { id_unico })
+  }
+}

@@ -1,7 +1,8 @@
-import { Injectable , NotFoundException } from '@nestjs/common';
+﻿import { Injectable , NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { PerfilUsuario, PerfilUsuarioDocument } from './schemas/usuario.schema';
+import { user_documents } from './schemas/user_documents.schema';
 
 @Injectable()
 export class AppService {
@@ -9,10 +10,11 @@ export class AppService {
   constructor(
     @InjectModel(PerfilUsuario.name)
     private readonly perfilUsuarioModel: Model<PerfilUsuarioDocument>,
+    @InjectModel(user_documents.name) private readonly docsModel: Model<any>,
   ) {}
 
 
-   // 🔹 Crear perfil cuando SQL lo emite
+   // ðŸ”¹ Crear perfil cuando SQL lo emite
   async create(data: Partial<PerfilUsuario>) {
     const perfil = new this.perfilUsuarioModel({
       id_unico: data.id_unico,
@@ -49,7 +51,7 @@ async updateProfileByUniqueId(data: { id_unico: string; [key: string]: any }) {
       throw new NotFoundException(`Perfil con id_unico ${id_unico} no encontrado`);
     }
 
-    console.log('✅ Perfil actualizado:', perfil);
+    console.log('âœ… Perfil actualizado:', perfil);
     return perfil;
   }
 
@@ -65,7 +67,24 @@ async updateProfileByUniqueId(data: { id_unico: string; [key: string]: any }) {
   }
 
   /////////////////////////////////////////////////////////
-  //servicios de documentos
-  
+    // guarda una url en un slot
+  async save_doc_one(data: { id_unico: string, slot: 'dpi'|'foto_dpi'|'penal'|'policial', url: string }) {
+    const d = await this.docsModel.findOne({ id_unico: data.id_unico }) || await this.docsModel.create({ id_unico: data.id_unico, slots: {} })
+    d.slots = { ...d.slots, [data.slot]: data.url }
+    await d.save()
+    return { id_unico: d.id_unico, slots: d.slots }
+  }
 
-}
+  // guarda varias urls
+  async save_doc_many(data: { id_unico: string, items: { slot: 'dpi'|'foto_dpi'|'penal'|'policial', url: string }[] }) {
+    const d = await this.docsModel.findOne({ id_unico: data.id_unico }) || await this.docsModel.create({ id_unico: data.id_unico, slots: {} })
+    for (const it of data.items) { d.slots[it.slot] = it.url }
+    await d.save()
+    return { id_unico: d.id_unico, slots: d.slots }
+  }
+
+  // obtiene todas las urls
+  async get_docs(id_unico: string) {
+    const d = await this.docsModel.findOne({ id_unico })
+    return { id_unico, slots: d?.slots || {} }
+  }
