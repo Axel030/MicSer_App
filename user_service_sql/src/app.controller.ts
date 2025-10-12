@@ -1,4 +1,4 @@
-import { Controller } from '@nestjs/common';
+import { Controller, Post, Body } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { AppService } from './app.service';
 import { Usuario } from './entity/user.entity';
@@ -7,29 +7,25 @@ import { Usuario } from './entity/user.entity';
 export class AppController {
   constructor(private readonly appService: AppService) {}
 
-  // Obtener todos los usuarios
-  @MessagePattern({ cmd: 'get_users' })
-  findAll(): Promise<Usuario[]> {
-    return this.appService.findAll();
-  }
+
   
-// Obtener usuario SQL + perfil de Mongo
-@MessagePattern({ cmd: 'get_user_with_profile' })
-async getUserWithProfile(@Payload() data: { id: number }) {
-  return this.appService.getUserWithProfile(data.id);
-}
+  // Obtener usuario SQL + perfil de Mongo
+  @MessagePattern({ cmd: 'get_user_with_profile' })
+  async getUserWithProfile(@Payload() data: { id: number }) {
+    return this.appService.getUserWithProfile(data.id);
+  }
+
+  // Actualizar perfil de usuario en Mongo
+  @Post('update-profile')
+  async updateProfile(@Body() data: { id_unico: string; [key: string]: any }) {
+    return this.appService.updateUserProfile(data);
+  }
 
 
   // Crear un nuevo usuario
   @MessagePattern({ cmd: 'create_user' })
   async createUser(@Payload() data: Partial<Usuario>): Promise<Usuario> {
     return this.appService.createUser(data);
-  }
-
-  // Buscar usuario por correo
-  @MessagePattern({ cmd: 'find_by_email' })
-  async findByEmail(@Payload() data: { correo_electronico: string }): Promise<Usuario> {
-    return this.appService.findByEmail(data.correo_electronico);
   }
 
   // Actualizar usuario
@@ -47,7 +43,8 @@ async getUserWithProfile(@Payload() data: { id: number }) {
 
   // Login
   @MessagePattern({ cmd: 'login' })
-  async login(@Payload() data: { username: string; password: string }) {
-    return this.appService.login(data.username, data.password);
+  async login(@Payload() data: { correo_electronico: string; contrasena: string }) {
+    return this.appService.login(data.correo_electronico, data.contrasena);
   }
+
 }

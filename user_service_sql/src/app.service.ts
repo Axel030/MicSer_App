@@ -18,32 +18,21 @@ export class AppService {
     
   ) {}
 
-  // Obtener todos los usuarios
-  findAll(): Promise<Usuario[]> {
-    return this.courseRepo.find();
-  }
 
   
-// app.service.ts (user_service_sql) // Obtener usuario sql por ID con perfil de Mongo
-async getUserWithProfile(id: number) {
-  const user = await this.courseRepo.findOneBy({ id });
-  if (!user) throw new NotFoundException('Usuario no encontrado');
-
-  const profile = await firstValueFrom(
-    this.client.send({ cmd: 'get_profile_by_id_unico' }, { id_unico: user.unique_id }),
-  );
-
-  return {
-    ...user,
-    perfil: profile || null,
-  };
-}
-
-  // Buscar usuario por correo
-  async findByEmail(correo_electronico: string): Promise<Usuario> {
-    const user = await this.courseRepo.findOneBy({ correo_electronico });
+  // app.service.ts (user_service_sql) // Obtener usuario sql por ID con perfil de Mongo
+  async getUserWithProfile(id: number) {
+    const user = await this.courseRepo.findOneBy({ id });
     if (!user) throw new NotFoundException('Usuario no encontrado');
-    return user;
+
+    const profile = await firstValueFrom(
+      this.client.send({ cmd: 'get_profile_by_id_unico' }, { id_unico: user.unique_id }),
+    );
+
+    return {
+    ... user,
+      perfil: profile || null,
+    };
   }
 
   // Crear usuario con hash de contraseña
@@ -59,8 +48,7 @@ async getUserWithProfile(id: number) {
     // Emitimos evento a RabbitMQ para que Mongo cree perfil
     await this.client.emit('user_created', {
       id_unico: savedUser.unique_id, // <-- id único de SQL
-      nombre: savedUser.nombre,
-      correo_electronico: savedUser.correo_electronico,
+     
   });
 
   return savedUser;
@@ -89,12 +77,58 @@ async getUserWithProfile(id: number) {
   }
 
   // Login
-  async login(correo_electronico: string, contrasena: string) {
-    const user = await this.findByEmail(correo_electronico);
-    const isMatch = await bcrypt.compare(contrasena, user.contrasena);
-    if (!isMatch) throw new UnauthorizedException('Contraseña incorrecta');
+  // app.service.ts
+  async login(correo: string, contrasena: string) {
+    try {
+     const usuario = await this.courseRepo.findOne({
+        where: { correo_electronico: correo },
+      });
 
-    const payload = { sub: user.id, correo_electronico: user.correo_electronico };
-    return { access_token: this.jwtService.sign(payload) };
+      if (!usuario) {
+        return { status: 'error', message: 'Usuario no encontrado' };
+      }
+
+      const contrasenaValida = await bcrypt.compare(contrasena, usuario.contrasena);
+      if (!contrasenaValida) {
+        return { status: 'error', message: 'Contraseña incorrecta' };
+      }
+//////////////////////////////////////////
+      const payload = { sub: usuario.id, correo_electronico: usuario.correo_electronico,
+        unique_id: usuario.unique_id,  // 👈 importante
+      };
+
+      return { 
+        status: 'success',
+        message: 'Bienvenido de nuevo',
+        access_token: this.jwtService.sign(payload),
+        user: {
+          id: usuario.id,
+          nombre: usuario.nombre,
+          correo_electronico: usuario.correo_electronico,
+          unique_id: usuario.unique_id, // 👈 lo mandamos explícito también
+        },
+      };
+//Ese unique_id lo guardas en SharedPreferences (Android) o en localStorage (Web) junto con el token.
+////////////////////////////////////////77
+    } 
+    
+    catch (error) {
+     console.error(error);
+      return { status: 'error', message: 'Ocurrió un error interno' };
+    }
+  }
+
+
+   // 🔹 Actualizar perfil en Mongo mediante RabbitMQ
+  async updateUserProfile(data: { id_unico: string; [key: string]: any }) {
+    console.log('📤 Enviando actualización de perfil a Mongo:', data);
+
+    const result = await firstValueFrom(
+      this.client.send({ cmd: 'update_profile_by_unique_id' }, data),
+    );
+
+    console.log('📥 Respuesta desde Mongo:', result);
+    return result;
+  
   }
 }
