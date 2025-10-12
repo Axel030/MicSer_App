@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, NotFoundException, Inject } from '@nestjs/common';
+import { Injectable, NotFoundException, HttpStatus, UnauthorizedException, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Usuario } from './entity/user.entity';
@@ -6,7 +6,7 @@ import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { ClientProxy } from '@nestjs/microservices';
 import { firstValueFrom } from 'rxjs';
-
+import { ApiResponse } from './interfaces/api-response.interface'; // 👈 importa la interfaz
 
 @Injectable()
 export class AppService {
@@ -14,121 +14,185 @@ export class AppService {
     @InjectRepository(Usuario)
     private readonly courseRepo: Repository<Usuario>,
     private readonly jwtService: JwtService,
-    @Inject('USER_SERVICE_MONGO') private readonly client: ClientProxy, // <-- RabbitMQ Client
-    
+    @Inject('USER_SERVICE_MONGO') private readonly client: ClientProxy,
   ) {}
 
-
-  
-  // app.service.ts (user_service_sql) // Obtener usuario sql por ID con perfil de Mongo
-  async getUserWithProfile(id: number) {
+  // Obtener usuario con perfil (SQL + Mongo)
+  async getUserWithProfile(id: number): Promise<ApiResponse> {
     const user = await this.courseRepo.findOneBy({ id });
-    if (!user) throw new NotFoundException('Usuario no encontrado');
+    if (!user) {
+      return {
+        status: 'error',
+        code: HttpStatus.NOT_FOUND,
+        message: 'Usuario no encontrado',
+      };
+    }
 
     const profile = await firstValueFrom(
       this.client.send({ cmd: 'get_profile_by_id_unico' }, { id_unico: user.unique_id }),
     );
 
     return {
-    ... user,
-      perfil: profile || null,
+      status: 'success',
+      code: HttpStatus.OK,
+      message: 'Usuario obtenido correctamente',
+      data: { ...user, perfil: profile || null },
     };
   }
 
-  // Crear usuario con hash de contraseña
-  async createUser(data: Partial<Usuario>): Promise<Usuario> {
-    // Hasheamos la contraseña
-    const salt = await bcrypt.genSalt();
-    const hash = await bcrypt.hash(data.contrasena, salt);
+  // Crear usuario
+  async createUser(data: Partial<Usuario>): Promise<ApiResponse> {
+    try {
+      const salt = await bcrypt.genSalt();
+      const hash = await bcrypt.hash(data.contrasena, salt);
+      const user = this.courseRepo.create({ ...data, contrasena: hash });
+      const savedUser = await this.courseRepo.save(user);
 
-    // Creamos el usuario
-    const user = this.courseRepo.create({ ...data, contrasena: hash });
-    const savedUser = await this.courseRepo.save(user);
+      // Emitir evento a Mongo
+      await this.client.emit('user_created', {
+        id_unico: savedUser.unique_id,
+      });
 
-    // Emitimos evento a RabbitMQ para que Mongo cree perfil
-    await this.client.emit('user_created', {
-      id_unico: savedUser.unique_id, // <-- id único de SQL
-     
-  });
-
-  return savedUser;
-}
+      return {
+        status: 'success',
+        code: HttpStatus.CREATED,
+        message: 'Usuario creado correctamente',
+        data: {
+          id: savedUser.id,
+          nombre: savedUser.nombre,
+          correo_electronico: savedUser.correo_electronico,
+          unique_id: savedUser.unique_id,
+        },
+      };
+    } catch (error) {
+      console.error('Error al crear usuario:', error);
+      return {
+        status: 'error',
+        code: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Error al crear usuario',
+      };
+    }
+  }
 
   // Actualizar usuario
-  async updateUser(id: number, data: Partial<Usuario>): Promise<Usuario> {
+  async updateUser(id: number, data: Partial<Usuario>): Promise<ApiResponse> {
     const user = await this.courseRepo.findOneBy({ id });
-    if (!user) throw new NotFoundException('Usuario no encontrado');
+    if (!user) {
+      return {
+        status: 'error',
+        code: HttpStatus.NOT_FOUND,
+        message: 'Usuario no encontrado',
+      };
+    }
 
-    // Si actualiza la contraseña, la hasheamos
     if (data.contrasena) {
       const salt = await bcrypt.genSalt();
       data.contrasena = await bcrypt.hash(data.contrasena, salt);
     }
 
     Object.assign(user, data);
-    return this.courseRepo.save(user);
+    const updated = await this.courseRepo.save(user);
+
+    return {
+      status: 'success',
+      code: HttpStatus.OK,
+      message: 'Usuario actualizado correctamente',
+      data: updated,
+    };
   }
 
   // Eliminar usuario
-  async deleteUser(id: number): Promise<{ message: string }> {
+  async deleteUser(id: number): Promise<ApiResponse> {
     const result = await this.courseRepo.delete(id);
-    if (result.affected === 0) throw new NotFoundException('Usuario no encontrado');
-    return { message: 'Usuario eliminado correctamente' };
+    if (result.affected === 0) {
+      return {
+        status: 'error',
+        code: HttpStatus.NOT_FOUND,
+        message: 'Usuario no encontrado',
+      };
+    }
+
+    return {
+      status: 'success',
+      code: HttpStatus.OK,
+      message: 'Usuario eliminado correctamente',
+    };
   }
 
   // Login
-  // app.service.ts
-  async login(correo: string, contrasena: string) {
+  async login(correo: string, contrasena: string): Promise<ApiResponse> {
     try {
-     const usuario = await this.courseRepo.findOne({
+      const usuario = await this.courseRepo.findOne({
         where: { correo_electronico: correo },
       });
 
       if (!usuario) {
-        return { status: 'error', message: 'Usuario no encontrado' };
+        return {
+          status: 'error',
+          code: HttpStatus.NOT_FOUND,
+          message: 'Usuario no encontrado',
+        };
       }
 
       const contrasenaValida = await bcrypt.compare(contrasena, usuario.contrasena);
       if (!contrasenaValida) {
-        return { status: 'error', message: 'Contraseña incorrecta' };
+        return {
+          status: 'error',
+          code: HttpStatus.UNAUTHORIZED,
+          message: 'Contraseña incorrecta',
+        };
       }
-//////////////////////////////////////////
-      const payload = { sub: usuario.id, correo_electronico: usuario.correo_electronico,
-        unique_id: usuario.unique_id,  // 👈 importante
+
+      const payload = {
+        sub: usuario.id,
+        correo_electronico: usuario.correo_electronico,
+        unique_id: usuario.unique_id,
       };
 
-      return { 
+      return {
         status: 'success',
-        message: 'Bienvenido de nuevo',
-        access_token: this.jwtService.sign(payload),
-        user: {
-          id: usuario.id,
-          nombre: usuario.nombre,
-          correo_electronico: usuario.correo_electronico,
-          unique_id: usuario.unique_id, // 👈 lo mandamos explícito también
+        code: HttpStatus.OK,
+        message: 'Inicio de sesión exitoso',
+        data: {
+          access_token: this.jwtService.sign(payload),
+          user: {
+            id: usuario.id,
+            nombre: usuario.nombre,
+            correo_electronico: usuario.correo_electronico,
+            unique_id: usuario.unique_id,
+          },
         },
       };
-//Ese unique_id lo guardas en SharedPreferences (Android) o en localStorage (Web) junto con el token.
-////////////////////////////////////////77
-    } 
-    
-    catch (error) {
-     console.error(error);
-      return { status: 'error', message: 'Ocurrió un error interno' };
+    } catch (error) {
+      console.error('Error en login:', error);
+      return {
+        status: 'error',
+        code: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Error interno al iniciar sesión',
+      };
     }
   }
 
+  // Actualizar perfil en Mongo
+  async updateUserProfile(data: { id_unico: string; [key: string]: any }): Promise<ApiResponse> {
+    try {
+      const result = await firstValueFrom(
+        this.client.send({ cmd: 'update_profile_by_unique_id' }, data),
+      );
 
-   // 🔹 Actualizar perfil en Mongo mediante RabbitMQ
-  async updateUserProfile(data: { id_unico: string; [key: string]: any }) {
-    console.log('📤 Enviando actualización de perfil a Mongo:', data);
-
-    const result = await firstValueFrom(
-      this.client.send({ cmd: 'update_profile_by_unique_id' }, data),
-    );
-
-    console.log('📥 Respuesta desde Mongo:', result);
-    return result;
-  
+      return {
+        status: 'success',
+        code: HttpStatus.OK,
+        message: 'Perfil actualizado correctamente',
+        data: result,
+      };
+    } catch (error) {
+      console.error('Error al actualizar perfil en Mongo:', error);
+      return {
+        status: 'error',
+        code: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Error al actualizar perfil en MongoDB',
+      };
+    }
   }
 }

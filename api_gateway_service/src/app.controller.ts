@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Inject, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Inject, Body, Param, HttpException, HttpStatus } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { firstValueFrom } from 'rxjs';
 
@@ -13,38 +13,63 @@ export class AppController {
     @Inject('ENTERPRISE_JOBS_MONGO') private readonly JobsMongoClient: ClientProxy,
   ) {}
 
+ // =========================
+  //       LOGIN
+  // =========================
+  @Post('login')
+  async login(@Body() body: { correo_electronico: string; contrasena: string }) {
+    try {
+      const response = await firstValueFrom(
+        this.Loginclient.send({ cmd: 'login' }, body)
+      );
+
+      // ✅ Propagar el código HTTP correcto
+      if (response.status === 'success') {
+        return {
+          statusCode: response.code,
+          status: response.status,
+          message: response.message,
+          data: response.data,
+        };
+      } else {
+        throw new HttpException(response.message, response.code);
+      }
+    } catch (error) {
+      throw new HttpException(error.message, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+
   // =========================
   //       USUARIOS (SQL)
   // =========================
 
-  // Login
-  @Post('login')
-  login(@Body() body: { correo_electronico: string; contrasena: string }) {
-    return this.Loginclient.send({ cmd: 'login' }, body);
+ @Post('users')
+  async createUser(@Body() body: any) {
+    const response = await firstValueFrom(this.Loginclient.send({ cmd: 'create_user' }, body));
+    if (response.status === 'error') throw new HttpException(response.message, response.code);
+    return response;
   }
 
-  // Obtener usuario con su perfil (SQL + Mongo)
-  @Get('users/:id/with-profile')
-  getUserWithProfile(@Param('id') id: string) {
-    return this.Loginclient.send({ cmd: 'get_user_with_profile' }, { id: Number(id) });
-  }
-
-  // Crear un nuevo usuario
-  @Post('users')
-  createUser(@Body() body: any) {
-    return this.Loginclient.send({ cmd: 'create_user' }, body);
-  }
-
-  // Actualizar usuario
   @Put('users/:id')
-  updateUser(@Param('id') id: number, @Body() body: any) {
-    return this.Loginclient.send({ cmd: 'update_user' }, { id, ...body });
+  async updateUser(@Param('id') id: number, @Body() body: any) {
+    const response = await firstValueFrom(this.Loginclient.send({ cmd: 'update_user' }, { id, ...body }));
+    if (response.status === 'error') throw new HttpException(response.message, response.code);
+    return response;
   }
 
-  // Eliminar usuario
   @Delete('users/:id')
-  deleteUser(@Param('id') id: number) {
-    return this.Loginclient.send({ cmd: 'delete_user' }, { id });
+  async deleteUser(@Param('id') id: number) {
+    const response = await firstValueFrom(this.Loginclient.send({ cmd: 'delete_user' }, { id }));
+    if (response.status === 'error') throw new HttpException(response.message, response.code);
+    return response;
+  }
+
+  @Get('users/:id/with-profile')
+  async getUserWithProfile(@Param('id') id: string) {
+    const response = await firstValueFrom(this.Loginclient.send({ cmd: 'get_user_with_profile' }, { id: Number(id) }));
+    if (response.status === 'error') throw new HttpException(response.message, response.code);
+    return response;
   }
 
   // =========================
@@ -64,11 +89,12 @@ export class AppController {
   }
 
   // Actualizar perfil por id_unico
-  @Put('profiles/unique/:id_unico')
+ @Put('profiles/unique/:id_unico')
   async updateProfileByUniqueId(@Param('id_unico') id_unico: string, @Body() body: any) {
     const response = await firstValueFrom(
       this.DatosClient.send({ cmd: 'update_profile_by_unique_id' }, { id_unico, ...body })
     );
+    if (response.status === 'error') throw new HttpException(response.message, response.code);
     return response;
   }
 
