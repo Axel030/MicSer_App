@@ -20,20 +20,20 @@ export class AppService {
 
 
   
-// app.service.ts (user_service_sql) // Obtener usuario sql por ID con perfil de Mongo
-async getUserWithProfile(id: number) {
-  const user = await this.courseRepo.findOneBy({ id });
-  if (!user) throw new NotFoundException('Usuario no encontrado');
+  // app.service.ts (user_service_sql) // Obtener usuario sql por ID con perfil de Mongo
+  async getUserWithProfile(id: number) {
+    const user = await this.courseRepo.findOneBy({ id });
+    if (!user) throw new NotFoundException('Usuario no encontrado');
 
-  const profile = await firstValueFrom(
-    this.client.send({ cmd: 'get_profile_by_id_unico' }, { id_unico: user.unique_id }),
-  );
+    const profile = await firstValueFrom(
+      this.client.send({ cmd: 'get_profile_by_id_unico' }, { id_unico: user.unique_id }),
+    );
 
-  return {
-    ...user,
-    perfil: profile || null,
-  };
-}
+    return {
+    ... user,
+      perfil: profile || null,
+    };
+  }
 
   // Crear usuario con hash de contraseña
   async createUser(data: Partial<Usuario>): Promise<Usuario> {

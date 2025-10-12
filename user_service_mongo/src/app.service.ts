@@ -55,12 +55,17 @@ async updateProfileByUniqueId(data: { id_unico: string; [key: string]: any }) {
 
 
 // Eliminar por id_unico
-async deleteByUniqueId(id_unico: string): Promise<PerfilUsuario | null> {
-  return this.perfilUsuarioModel.findOneAndDelete({ id_unico }).exec();
-}
+  async deleteByUniqueId(id_unico: string): Promise<PerfilUsuario | null> {
+    return this.perfilUsuarioModel.findOneAndDelete({ id_unico }).exec();
+  }
 
-// Buscar perfil por id_unico
-async findByIdUnico1(id_unico: string): Promise<PerfilUsuario | null> {
-  return this.perfilUsuarioModel.findOne({ id_unico }).exec();
-}
+  // Buscar perfil por id_unico
+  async findByIdUnico1(id_unico: string): Promise<PerfilUsuario | null> {
+    return this.perfilUsuarioModel.findOne({ id_unico }).exec();
+  }
+
+  /////////////////////////////////////////////////////////
+  //servicios de documentos
+  
+
 }

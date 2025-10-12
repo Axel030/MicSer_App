@@ -15,6 +15,6 @@ async function bootstrap() {
     },
   );
   await app.listen();
-  console.log('📚 Usuario_service_SQL microservice corriendo en puerto 3001');
+  console.log('📚 Escuchando user_sql_queue');
 }
 bootstrap();

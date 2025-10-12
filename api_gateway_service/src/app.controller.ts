@@ -9,6 +9,8 @@ export class AppController {
     @Inject('USER_SERVICE_SQL') private readonly Loginclient: ClientProxy,
     @Inject('USER_SERVICE_MONGO') private readonly DatosClient: ClientProxy,
     @Inject('AUTH_SERVICE') private readonly AuthClient: ClientProxy,
+    @Inject('ENTERPRISE_JOBS_SQL') private readonly JobsSQLClient: ClientProxy,
+    @Inject('ENTERPRISE_JOBS_MONGO') private readonly JobsMongoClient: ClientProxy,
   ) {}
 
   // =========================
@@ -76,6 +78,9 @@ export class AppController {
     return this.DatosClient.send({ cmd: 'delete_profile' }, { id });
   }
 
+
+
+  
    // =========================
   //       AUTENTICACIÓN
   // =========================
@@ -122,6 +127,47 @@ export class AppController {
     return createdUser;
   }
 
+
+
+  // =====================================================
+  //                 EMPRESAS Y EMPLEOS (SQL)
+  // =====================================================
+
+  // Crear compañía (solo SQL)
+  @Post('enterprise/companyUser')
+  async createEnterpriseCompany(@Body() body: any) {
+    const sqlCompany = await firstValueFrom(
+      this.JobsSQLClient.send({ cmd: 'create_company' }, body)
+    );
+
+    // ⚠️ Ya NO se envía nada a Mongo aquí.
+    // El evento 'enterprise_company_created' lo manejará automáticamente el servicio Mongo.
+
+    return { ...sqlCompany, message: 'Compañía creada correctamente' };
+  }
+
+  // Crear empleo (solo SQL)
+  @Post('enterprise/jobs')
+  async createEnterpriseJob(@Body() body: any) {
+    const sqlJob = await firstValueFrom(
+      this.JobsSQLClient.send({ cmd: 'create_enterprise_job' }, body)
+    );
+
+    // ⚠️ Ya NO se manda manualmente a Mongo.
+    // El evento 'enterprise_job_created' será escuchado por el microservicio Mongo.
+
+    return { ...sqlJob, message: 'Empleo creado correctamente' };
+  }
+
+  
+// actualizar detalle de empleo (Mongo)
+  @Put('enterprise/job-details/:uuid')
+  async updateJobDetail(@Param('uuid') uuid: string, @Body() body: any) {
+    const updatedDetail = await firstValueFrom(
+      this.JobsMongoClient.send({ cmd: 'update_job_detail' }, { uuid, updateData: body })
+    );
+    return updatedDetail;
+  }
 
 }
 

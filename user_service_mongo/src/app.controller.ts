@@ -48,5 +48,8 @@ async updateByUniqueId(@Payload() payload: { id_unico: string; [key: string]: an
   async deleteByUniqueId(@Payload() payload: { id_unico: string }) {
     return this.appService.deleteByUniqueId(payload.id_unico);
   }
+
+
+  
   
 }
