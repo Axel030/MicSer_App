@@ -12,6 +12,7 @@ export class AppController {
   @MessagePattern({ cmd: 'get_user_with_profile' })
   async getUserWithProfile(@Payload() data: { id: number }): Promise<ApiResponse> {
     return this.appService.getUserWithProfile(data.id);
+    
   }
 
   // Actualizar perfil de usuario en Mongo
@@ -24,6 +25,7 @@ export class AppController {
   @MessagePattern({ cmd: 'create_user' })
   async createUser(@Payload() data: Partial<Usuario>): Promise<ApiResponse> {
     return this.appService.createUser(data);
+    
   }
 
   // Actualizar usuario

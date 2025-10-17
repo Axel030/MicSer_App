@@ -1,52 +1,54 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { Usuario } from './entity/user.entity';
-import { ClientsModule, Transport } from '@nestjs/microservices'; 
+import { ClientsModule, Transport } from '@nestjs/microservices';
 
 @Module({
   imports: [
-     ConfigModule.forRoot({
-      isGlobal: true, // Hace que las variables estén disponibles en todo el proyecto
-    }),
-    
-    TypeOrmModule.forRoot({
+
+    ConfigModule.forRoot({ isGlobal: true }), // primero
+    TypeOrmModule.forRootAsync({
+    imports: [ConfigModule],
+    inject: [ConfigService],
+    useFactory: (config: ConfigService) => ({
       type: 'postgres',
-      host: 'localhost',
-      port: 5432,
-      username: 'postgres',
-      password: '123456',
-      database: 'proyectofinal',
+      host: config.get<string>('DB_HOST'),
+      port: Number(config.get('DB_PORT')),
+      username: config.get<string>('DB_USER'),
+      password: config.get<string>('DB_PASSWORD'),
+      database: config.get<string>('DB_NAME'),
       entities: [Usuario],
       synchronize: false,
     }),
+  }),
     TypeOrmModule.forFeature([Usuario]),
 
-    JwtModule.register({
-      secret: 'MI_SECRETO_SUPER_SEGURO', // usa tu variable de entorno en producción
-      signOptions: { expiresIn: '1h' },   // duración del token
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        secret: config.get<string>('JWT_SECRET'),
+        signOptions: { expiresIn: '1h' },
+      }),
     }),
-
     // <-- Cliente RabbitMQ para emitir eventos
     ClientsModule.register([
       {
-        name: 'USER_SERVICE_MONGO', // este es el microservicio Mongo
+        name: 'USER_SERVICE_MONGO',
         transport: Transport.RMQ,
         options: {
-          urls: ['amqp://localhost:5672'], // tu RabbitMQ
+          urls: ['amqp://localhost:5672'],
           queue: 'user_created_queue',
           queueOptions: { durable: true },
         },
       },
     ]),
-
   ],
   controllers: [AppController],
   providers: [AppService],
 })
 export class AppModule {}
-
-

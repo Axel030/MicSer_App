@@ -1,71 +1,130 @@
-import { Injectable , NotFoundException } from '@nestjs/common';
+import { Injectable, HttpStatus } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { PerfilUsuario, PerfilUsuarioDocument } from './schemas/usuario.schema';
+import { ApiResponse } from './interfaces/api-response.interface';
 
 @Injectable()
 export class AppService {
-
   constructor(
     @InjectModel(PerfilUsuario.name)
     private readonly perfilUsuarioModel: Model<PerfilUsuarioDocument>,
   ) {}
 
+  // =========================
+  //       CREAR PERFIL
+  // =========================
+  async createProfile(data: Partial<PerfilUsuario>): Promise<ApiResponse> {
+    try {
+      const perfil = new this.perfilUsuarioModel({ id_unico: data.id_unico });
+      const saved = await perfil.save();
 
-   // 🔹 Crear perfil cuando SQL lo emite
-  async create(data: Partial<PerfilUsuario>) {
-    const perfil = new this.perfilUsuarioModel({
-      id_unico: data.id_unico,
-    });
-    return perfil.save();
-  }
-
-  // Actualizar perfil por id
-  async update(id: string, data: Partial<PerfilUsuario>): Promise<PerfilUsuario | null> {
-    return this.perfilUsuarioModel.findByIdAndUpdate(id, data, { new: true }).exec();
-  }
-
-  // Eliminar perfil por id
-  async delete(id: string): Promise<PerfilUsuario | null> {
-    return this.perfilUsuarioModel.findByIdAndDelete(id).exec();
-  }
-
-  // Buscar perfil por id_unico (para relacionar con Postgres)
-  async findByIdUnico(id_unico: string): Promise<PerfilUsuario | null> {
-    return this.perfilUsuarioModel.findOne({ id_unico }).exec();
-  }
-/////////////////////////////////////////////////////////////////////////////////////
-  // Actualizar por id_unico
-async updateProfileByUniqueId(data: { id_unico: string; [key: string]: any }) {
-    const { id_unico, ...updates } = data;
-
-    const perfil = await this.perfilUsuarioModel.findOneAndUpdate(
-      { id_unico },
-      { $set: updates },
-      { new: true },
-    );
-
-    if (!perfil) {
-      throw new NotFoundException(`Perfil con id_unico ${id_unico} no encontrado`);
+      return {
+        status: 'success',
+        code: HttpStatus.CREATED,
+        message: 'Perfil creado correctamente en MongoDB',
+        data: saved,
+      };
+    } catch (error) {
+      return {
+        status: 'error',
+        code: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Error al crear el perfil',
+      };
     }
-
-    console.log('✅ Perfil actualizado:', perfil);
-    return perfil;
   }
 
+  // =========================
+  //   OBTENER PERFIL POR id_unico
+  // =========================
+  async findProfileByUniqueId(id_unico: string): Promise<ApiResponse> {
+    try {
+      const perfil = await this.perfilUsuarioModel.findOne({ id_unico }).exec();
 
-// Eliminar por id_unico
-  async deleteByUniqueId(id_unico: string): Promise<PerfilUsuario | null> {
-    return this.perfilUsuarioModel.findOneAndDelete({ id_unico }).exec();
+      if (!perfil) {
+        return {
+          status: 'error',
+          code: HttpStatus.NOT_FOUND,
+          message: `Perfil con id_unico ${id_unico} no encontrado`,
+        };
+      }
+
+      return {
+        status: 'success',
+        code: HttpStatus.OK,
+        message: 'Perfil encontrado correctamente',
+        data: perfil,
+      };
+    } catch {
+      return {
+        status: 'error',
+        code: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Error al buscar el perfil',
+      };
+    }
   }
 
-  // Buscar perfil por id_unico
-  async findByIdUnico1(id_unico: string): Promise<PerfilUsuario | null> {
-    return this.perfilUsuarioModel.findOne({ id_unico }).exec();
+  // =========================
+  //    ACTUALIZAR PERFIL POR id_unico
+  // =========================
+  async updateProfileByUniqueId(data: { id_unico: string; [key: string]: any }): Promise<ApiResponse> {
+    try {
+      const { id_unico, ...updates } = data;
+      const perfil = await this.perfilUsuarioModel.findOneAndUpdate(
+        { id_unico },
+        { $set: updates },
+        { new: true },
+      );
+
+      if (!perfil) {
+        return {
+          status: 'error',
+          code: HttpStatus.NOT_FOUND,
+          message: `Perfil con id_unico ${id_unico} no encontrado`,
+        };
+      }
+
+      return {
+        status: 'success',
+        code: HttpStatus.OK,
+        message: 'Perfil actualizado correctamente',
+        data: perfil,
+      };
+    } catch {
+      return {
+        status: 'error',
+        code: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Error al actualizar el perfil',
+      };
+    }
   }
 
-  /////////////////////////////////////////////////////////
-  //servicios de documentos
-  
+  // =========================
+  //    ELIMINAR PERFIL POR id_unico
+  // =========================
+  async deleteProfileByUniqueId(id_unico: string): Promise<ApiResponse> {
+    try {
+      const deleted = await this.perfilUsuarioModel.findOneAndDelete({ id_unico }).exec();
 
+      if (!deleted) {
+        return {
+          status: 'error',
+          code: HttpStatus.NOT_FOUND,
+          message: `Perfil con id_unico ${id_unico} no encontrado`,
+        };
+      }
+
+      return {
+        status: 'success',
+        code: HttpStatus.OK,
+        message: 'Perfil eliminado correctamente',
+      };
+    } catch {
+      return {
+        status: 'error',
+        code: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Error al eliminar el perfil',
+      };
+    }
+  }
 }
