@@ -9,7 +9,7 @@ async function bootstrap() {
     transport: Transport.RMQ,
     options: {
       urls: ['amqp://localhost:5672'],
-      queue: 'auth_queue',  // 👈 nombre de cola
+      queue: 'auth_queue',  
       queueOptions: { durable: true },
     },
   });

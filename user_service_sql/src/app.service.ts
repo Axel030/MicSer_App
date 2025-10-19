@@ -1,4 +1,5 @@
-import { Injectable, UnauthorizedException, NotFoundException, Inject } from '@nestjs/common';
+import {
+  Injectable,HttpStatus,Inject} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Usuario } from './entity/user.entity';
@@ -6,129 +7,292 @@ import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { ClientProxy } from '@nestjs/microservices';
 import { firstValueFrom } from 'rxjs';
-
+import { ApiResponse } from './interfaces/api-response.interface';
 
 @Injectable()
 export class AppService {
   constructor(
     @InjectRepository(Usuario)
-    private readonly courseRepo: Repository<Usuario>,
+    private readonly userRepo: Repository<Usuario>,
     private readonly jwtService: JwtService,
-    @Inject('USER_SERVICE_MONGO') private readonly client: ClientProxy, // <-- RabbitMQ Client
-    
+    @Inject('USER_SERVICE_MONGO') private readonly client: ClientProxy,
   ) {}
 
-
-  
-  // app.service.ts (user_service_sql) // Obtener usuario sql por ID con perfil de Mongo
-  async getUserWithProfile(id: number) {
-    const user = await this.courseRepo.findOneBy({ id });
-    if (!user) throw new NotFoundException('Usuario no encontrado');
-
-    const profile = await firstValueFrom(
-      this.client.send({ cmd: 'get_profile_by_id_unico' }, { id_unico: user.unique_id }),
-    );
-
-    return {
-    ... user,
-      perfil: profile || null,
-    };
-  }
-
-  // Crear usuario con hash de contraseña
-  async createUser(data: Partial<Usuario>): Promise<Usuario> {
-    // Hasheamos la contraseña
-    const salt = await bcrypt.genSalt();
-    const hash = await bcrypt.hash(data.contrasena, salt);
-
-    // Creamos el usuario
-    const user = this.courseRepo.create({ ...data, contrasena: hash });
-    const savedUser = await this.courseRepo.save(user);
-
-    // Emitimos evento a RabbitMQ para que Mongo cree perfil
-    await this.client.emit('user_created', {
-      id_unico: savedUser.unique_id, // <-- id único de SQL
-     
-  });
-
-  return savedUser;
-}
-
-  // Actualizar usuario
-  async updateUser(id: number, data: Partial<Usuario>): Promise<Usuario> {
-    const user = await this.courseRepo.findOneBy({ id });
-    if (!user) throw new NotFoundException('Usuario no encontrado');
-
-    // Si actualiza la contraseña, la hasheamos
-    if (data.contrasena) {
-      const salt = await bcrypt.genSalt();
-      data.contrasena = await bcrypt.hash(data.contrasena, salt);
-    }
-
-    Object.assign(user, data);
-    return this.courseRepo.save(user);
-  }
-
-  // Eliminar usuario
-  async deleteUser(id: number): Promise<{ message: string }> {
-    const result = await this.courseRepo.delete(id);
-    if (result.affected === 0) throw new NotFoundException('Usuario no encontrado');
-    return { message: 'Usuario eliminado correctamente' };
-  }
-
-  // Login
-  // app.service.ts
-  async login(correo: string, contrasena: string) {
+  // ================================================
+  // 🔹 Obtener usuario con perfil (SQL + Mongo)
+  // ================================================
+  async getUserWithProfile(id: number): Promise<ApiResponse> {
     try {
-     const usuario = await this.courseRepo.findOne({
+      const user = await this.userRepo.findOneBy({ id });
+      if (!user) {
+        console.log(`❌ Usuario con ID ${id} no encontrado`);
+        return {
+          status: 'error',
+          code: HttpStatus.NOT_FOUND,
+          message: 'Usuario no encontrado',
+        };
+      }
+
+      const profile = await firstValueFrom(
+        this.client.send({ cmd: 'get_profile_by_id_unico' }, { id_unico: user.unique_id }),
+      );
+
+      console.log(`✅ Usuario ${user.correo_electronico} y perfil obtenidos correctamente`);
+      return {
+        status: 'success',
+        code: HttpStatus.OK,
+        message: 'Usuario obtenido correctamente',
+        data: { ...user, perfil: profile || null },
+      };
+    } catch (error) {
+      console.error('🔥 Error al obtener usuario con perfil:', error);
+      return {
+        status: 'error',
+        code: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Error interno al obtener usuario y perfil',
+      };
+    }
+  }
+
+  // ================================================
+  // 🔹 Crear usuario
+  // ================================================
+  
+  async createUser(data: Partial<Usuario>): Promise<ApiResponse> {
+    try {
+      // Verificar duplicado
+      const existing = await this.userRepo.findOne({
+        where: { correo_electronico: data.correo_electronico },
+      });
+
+      if (existing) {
+        console.log(`⚠️ El correo ${data.correo_electronico} ya está registrado`);
+        return {
+          status: 'error',
+          code: HttpStatus.CONFLICT,
+          message: 'El correo electrónico ya está registrado',
+        };
+      }
+
+      const hash = await bcrypt.hash(data.contrasena, 10);
+      const user = this.userRepo.create({ ...data, contrasena: hash });
+      const savedUser = await this.userRepo.save(user);
+
+      // Emitir evento a Mongo
+      await this.client.emit('user_created', {
+        id_unico: savedUser.unique_id,
+      });
+
+      console.log(`✅ Usuario creado exitosamente: ${savedUser.correo_electronico}`);
+      return {
+        status: 'success',
+        code: HttpStatus.CREATED,
+        message: 'Usuario creado correctamente',
+        data: {
+          id: savedUser.id,
+          nombre: savedUser.nombre,
+          correo_electronico: savedUser.correo_electronico,
+          unique_id: savedUser.unique_id,
+        },
+      };
+    } catch (error) {
+      console.error('🔥 Error al crear usuario:', error);
+      return {
+        status: 'error',
+        code: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Error interno al crear el usuario',
+      };
+    }
+  }
+
+  // ================================================
+  // 🔹 Actualizar usuario
+  // ================================================
+  async updateUser(id: number, data: Partial<Usuario>): Promise<ApiResponse> {
+    try {
+      const user = await this.userRepo.findOneBy({ id });
+      if (!user) {
+        console.log(`⚠️ Usuario con ID ${id} no encontrado`);
+        return {
+          status: 'error',
+          code: HttpStatus.NOT_FOUND,
+          message: 'Usuario no encontrado',
+        };
+      }
+
+      if (data.contrasena) {
+        const salt = await bcrypt.genSalt();
+        data.contrasena = await bcrypt.hash(data.contrasena, salt);
+      }
+
+      Object.assign(user, data);
+      const updated = await this.userRepo.save(user);
+
+      console.log(`✅ Usuario con ID ${id} actualizado correctamente`);
+      return {
+        status: 'success',
+        code: HttpStatus.OK,
+        message: 'Usuario actualizado correctamente',
+        data: updated,
+      };
+    } catch (error) {
+      console.error('🔥 Error al actualizar usuario:', error);
+      return {
+        status: 'error',
+        code: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Error interno al actualizar usuario',
+      };
+    }
+  }
+
+  // ================================================
+  // 🔹 Eliminar usuario
+  // ================================================
+  async deleteUser(id: number): Promise<ApiResponse> {
+    try {
+      const result = await this.userRepo.delete(id);
+      if (result.affected === 0) {
+        console.log(`⚠️ Intento de eliminar usuario inexistente con ID ${id}`);
+        return {
+          status: 'error',
+          code: HttpStatus.NOT_FOUND,
+          message: 'Usuario no encontrado para eliminar',
+        };
+      }
+
+      console.log(`🗑️ Usuario con ID ${id} eliminado correctamente`);
+      return {
+        status: 'success',
+        code: HttpStatus.NO_CONTENT,
+        message: 'Usuario eliminado correctamente',
+      };
+    } catch (error) {
+      console.error('🔥 Error al eliminar usuario:', error);
+      return {
+        status: 'error',
+        code: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Error interno al eliminar usuario',
+      };
+    }
+  }
+
+  // ================================================
+  // 🔹 Login
+  // ================================================
+  async login(correo: string, contrasena: string): Promise<ApiResponse> {
+    try {
+      const usuario = await this.userRepo.findOne({
         where: { correo_electronico: correo },
       });
 
       if (!usuario) {
-        return { status: 'error', message: 'Usuario no encontrado' };
+        console.log(`❌ Usuario no encontrado: ${correo}`);
+        return {
+          status: 'error',
+          code: HttpStatus.NOT_FOUND,
+          message: 'Usuario no encontrado',
+        };
       }
 
       const contrasenaValida = await bcrypt.compare(contrasena, usuario.contrasena);
       if (!contrasenaValida) {
-        return { status: 'error', message: 'Contraseña incorrecta' };
+        console.log(`⚠️ Contraseña incorrecta para usuario: ${correo}`);
+        return {
+          status: 'error',
+          code: HttpStatus.UNAUTHORIZED, // 401: acceso no autorizado
+          message: 'Contraseña incorrecta',
+        };
       }
-//////////////////////////////////////////
-      const payload = { sub: usuario.id, correo_electronico: usuario.correo_electronico,
-        unique_id: usuario.unique_id,  // 👈 importante
+
+      const payload = {
+        sub: usuario.id,
+        correo_electronico: usuario.correo_electronico,
+        unique_id: usuario.unique_id,
       };
 
-      return { 
+      console.log(`✅ Login exitoso: ${correo}`);
+      return {
         status: 'success',
-        message: 'Bienvenido de nuevo',
-        access_token: this.jwtService.sign(payload),
-        user: {
-          id: usuario.id,
-          nombre: usuario.nombre,
-          correo_electronico: usuario.correo_electronico,
-          unique_id: usuario.unique_id, // 👈 lo mandamos explícito también
+        code: HttpStatus.OK,//200
+        message: 'Inicio de sesión exitoso',
+        data: {
+          access_token: this.jwtService.sign(payload),
+          user: {
+            id: usuario.id,
+            nombre: usuario.nombre,
+            correo_electronico: usuario.correo_electronico,
+            unique_id: usuario.unique_id,
+          },
         },
       };
-//Ese unique_id lo guardas en SharedPreferences (Android) o en localStorage (Web) junto con el token.
-////////////////////////////////////////77
-    } 
-    
-    catch (error) {
-     console.error(error);
-      return { status: 'error', message: 'Ocurrió un error interno' };
+    } catch (error) {
+      console.error('🔥 Error en login:', error);
+      return {
+        status: 'error',
+        code: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Error interno en el inicio de sesión',
+      };
     }
   }
 
+  // ================================================
+  // 🔹 Actualizar perfil en Mongo
+  // ================================================
+  async updateUserProfile(data: { id_unico: string; [key: string]: any }): Promise<ApiResponse> {
+    try {
+      const result = await firstValueFrom(
+        this.client.send({ cmd: 'update_profile_by_unique_id' }, data),
+      );
 
-   // 🔹 Actualizar perfil en Mongo mediante RabbitMQ
-  async updateUserProfile(data: { id_unico: string; [key: string]: any }) {
-    console.log('📤 Enviando actualización de perfil a Mongo:', data);
-
-    const result = await firstValueFrom(
-      this.client.send({ cmd: 'update_profile_by_unique_id' }, data),
-    );
-
-    console.log('📥 Respuesta desde Mongo:', result);
-    return result;
-  
+      console.log(`✅ Perfil actualizado en Mongo para id_unico: ${data.id_unico}`);
+      return {
+        status: 'success',
+        code: HttpStatus.OK,
+        message: 'Perfil actualizado correctamente en MongoDB',
+        data: result,
+      };
+    } catch (error) {
+      console.error('🔥 Error al actualizar perfil en Mongo:', error);
+      return {
+        status: 'error',
+        code: HttpStatus.BAD_GATEWAY, // error entre servicios
+        message: 'Error al comunicar con el servicio de MongoDB',
+      };
+    }
   }
+
+  // ================================================
+  // 🔹 Verificar si el correo electrónico ya exist
+  // ================================================e
+  async checkEmailExists(correo_electronico: string): Promise<ApiResponse> {
+    try {
+      const user = await this.userRepo.findOne({
+        where: { correo_electronico },
+      });
+
+      if (user) {
+        return {
+          status: 'error',
+          code: HttpStatus.CONFLICT,
+          message: 'El correo ya existe',
+          data: { exists: true },
+        };
+      } else {
+        return {
+          status: 'success',
+          code: HttpStatus.OK,
+          message: 'El correo no existe',
+          data: { exists: false },
+        };
+      }
+    } catch (error) {
+      console.error('🔥 Error al verificar correo electrónico:', error);
+      return {
+        status: 'error',
+        code: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Error interno al verificar el correo electrónico',
+      };
+    }
+  }
+
 }
