@@ -3,6 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PerfilUsuario, PerfilUsuarioSchema } from './schemas/usuario.schema';
+import { user_documents, user_documents_schema } from './schemas/user_documents.schema';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 
 @Module({
@@ -11,8 +12,9 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
     MongooseModule.forRoot('mongodb://localhost:27017/PerfilUsuariosDB'),
     MongooseModule.forFeature([
       { name: PerfilUsuario.name, schema: PerfilUsuarioSchema },
+      { name: user_documents.name, schema: user_documents_schema }
     ]),
-
+    
     // Registro del microservicio como consumidor de RabbitMQ
     ClientsModule.register([
       {

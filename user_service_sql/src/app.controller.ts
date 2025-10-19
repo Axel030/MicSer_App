@@ -46,4 +46,9 @@ export class AppController {
   async login(@Payload() data: { correo_electronico: string; contrasena: string }): Promise<ApiResponse> {
     return this.appService.login(data.correo_electronico, data.contrasena);
   }
+
+  @MessagePattern({ cmd: 'check_email' })
+async checkEmail(@Payload() data: { correo_electronico: string }) {
+  return this.appService.checkEmailExists(data.correo_electronico);
+}
 }

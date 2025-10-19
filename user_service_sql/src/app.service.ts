@@ -1,8 +1,5 @@
 import {
-  Injectable,
-  HttpStatus,
-  Inject,
-} from '@nestjs/common';
+  Injectable,HttpStatus,Inject} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Usuario } from './entity/user.entity';
@@ -263,4 +260,39 @@ export class AppService {
       };
     }
   }
+
+  // ================================================
+  // 🔹 Verificar si el correo electrónico ya exist
+  // ================================================e
+  async checkEmailExists(correo_electronico: string): Promise<ApiResponse> {
+    try {
+      const user = await this.userRepo.findOne({
+        where: { correo_electronico },
+      });
+
+      if (user) {
+        return {
+          status: 'error',
+          code: HttpStatus.CONFLICT,
+          message: 'El correo ya existe',
+          data: { exists: true },
+        };
+      } else {
+        return {
+          status: 'success',
+          code: HttpStatus.OK,
+          message: 'El correo no existe',
+          data: { exists: false },
+        };
+      }
+    } catch (error) {
+      console.error('🔥 Error al verificar correo electrónico:', error);
+      return {
+        status: 'error',
+        code: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Error interno al verificar el correo electrónico',
+      };
+    }
+  }
+
 }

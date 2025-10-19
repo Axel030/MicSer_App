@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Put, Delete, Inject, Body, Param, HttpException, HttpStatus } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
+import { response } from 'express';
 import { firstValueFrom } from 'rxjs';
 
 @Controller()
@@ -48,7 +49,7 @@ export class AppController {
   //       USUARIOS (SQL)
   // =========================
 
- @Post('users')
+  @Post('users')
   async createUser(@Body() body: any) {
     try {
     const response = await firstValueFrom(this.Loginclient.send({ cmd: 'create_user' }, body));
@@ -221,6 +222,26 @@ export class AppController {
 
 
 
+  // =======================================================
+  //                 DOCUMENTOS ENDPOINTS (Mongo)
+  // =======================================================
+
+  // documentos endpoints
+  @Post('documents/save-one')
+  saveDocOne(@Body() body: { id_unico: string, slot: 'dpi'|'foto_dpi'|'penal'|'policial', url: string }) {
+    return this.DatosClient.send({ cmd: 'docs.save.one' }, body)
+  }
+
+  @Post('documents/save-many')
+  saveDocMany(@Body() body: { id_unico: string, items: { slot: 'dpi'|'foto_dpi'|'penal'|'policial', url: string }[] }) {
+    return this.DatosClient.send({ cmd: 'docs.save.many' }, body)
+  }
+
+  @Get('documents/:id_unico')
+  getDocs(@Param('id_unico') id_unico: string) {
+    return this.DatosClient.send({ cmd: 'docs.get.all' }, { id_unico })
+  }
+
 
   
   // =================================
@@ -256,67 +277,80 @@ export class AppController {
   @Post('register/init')
   async registerInit(@Body() body: any) {
     try {
-      // 1️⃣ Guardar datos temporales en memoria
-      const tempId = body.correo_electronico;
-      this.tempUsers.set(tempId, body);
+      const { correo_electronico } = body;
 
-      // 2️⃣ Enviar OTP al correo
-      const result = await firstValueFrom(
-        this.AuthClient.send(
-          { cmd: 'send_otp' },
-          { channel: 'email', target: body.correo_electronico },
-        ),
+      // 1️⃣ Revisar si el correo ya existe en la base de datos
+      const existingUser = await firstValueFrom(
+        this.Loginclient.send({ cmd: 'check_email' }, { correo_electronico })
       );
 
-      // Validar respuesta del microservicio
+      if (existingUser.status === 'error') throw new HttpException(existingUser.message, existingUser.code || HttpStatus.INTERNAL_SERVER_ERROR);
+      if (existingUser.data?.exists) {
+        return { status: 'error', message: 'El correo ya está registrado, por favor usa otro' };
+      }
+      // 2️⃣ Guardar datos temporales en memoria
+      this.tempUsers.set(correo_electronico, body);
+
+      // 3️⃣ Enviar OTP
+      const result = await firstValueFrom(
+        this.AuthClient.send({ cmd: 'send_otp' }, { channel: 'email', target: correo_electronico })
+      );
+
       if (result.status === 'error') {
-        throw new HttpException(result.message, result.code || HttpStatus.BAD_REQUEST);
+      throw new HttpException(result.message, result.code || HttpStatus.BAD_REQUEST);
       }
 
       return {
         status: 'success',
         message: 'OTP enviado correctamente',
-        correo: body.correo_electronico,
+        correo: correo_electronico,
       };
     } catch (error) {
-      const status =
-        error.getStatus?.() ||
-        error.code ||
-        HttpStatus.INTERNAL_SERVER_ERROR;
+      const status = error.getStatus?.() || error.code || HttpStatus.INTERNAL_SERVER_ERROR;
       const message = error.message || 'Error interno al iniciar registro';
       throw new HttpException(message, status);
     }
   }
 
+
   // 🟩 CONFIRMAR REGISTRO
 
   @Post('register/confirm')
-  async registerConfirm(
-    @Body() body: { correo_electronico: string; code: string },
-  ) {
+  async registerConfirm(@Body() body: { correo_electronico: string; code: string }) {
     try {
       // 1️⃣ Verificar OTP
       const otpResponse = await firstValueFrom(
-        this.AuthClient.send({ cmd: 'verify_otp' }, { code: body.code }),
+        this.AuthClient.send({ cmd: 'verify_otp' }, { code: body.code , correo_electronico: body.correo_electronico }),
       );
 
       if (otpResponse.status === 'error') {
-        throw new HttpException(
-          otpResponse.message,
-          otpResponse.code || HttpStatus.BAD_REQUEST,
-        );
+        return {
+          status: 'error',
+          code: otpResponse.code || HttpStatus.BAD_REQUEST,
+          message: otpResponse.message,
+        };
       }
+
+      // ✅ Respuesta individual del OTP (solo confirmación)
+      const otpResult = {
+        status: 'success',
+        code: HttpStatus.OK,
+        message: 'OTP verificado correctamente',
+      };
 
       // 2️⃣ Recuperar datos temporales
       const userData = this.tempUsers.get(body.correo_electronico);
       if (!userData) {
-        throw new HttpException(
-          'Datos de registro no encontrados o expirados',
-          HttpStatus.NOT_FOUND,
-        );
-      }
+        return {
+          status: 'error',
+          code: HttpStatus.NOT_FOUND,
+          message: 'Datos de registro no encontrados o expirados',
+        };
+     }
 
-      // 3️⃣ Crear usuario en user_service_sql
+     //Para revisión de envio de datos del temporal al User_SERVICE_SQL
+     //console.log('🧩 userData recuperado de tempUsers:', userData); 
+      // 3️⃣ Crear usuario
       const createdUser = await firstValueFrom(
         this.Loginclient.send({ cmd: 'create_user' }, userData),
       );
@@ -324,17 +358,32 @@ export class AppController {
       // 4️⃣ Eliminar datos temporales
       this.tempUsers.delete(body.correo_electronico);
 
-      // 5️⃣ Responder
-      return createdUser;
+      // ✅ Respuesta final del usuario
+      return {
+        otp: otpResult,
+        userCreation: {
+          status: createdUser.status || 'success',
+          code: createdUser.code || HttpStatus.CREATED,
+          message: createdUser.message || 'Usuario creado exitosamente',
+          data: createdUser.data || createdUser,
+        },
+      };
+
     } catch (error) {
       const status =
-        error.getStatus?.() ||
-        error.code ||
-        HttpStatus.INTERNAL_SERVER_ERROR;
-      const message = error.message || 'Error interno al confirmar registro';
-      throw new HttpException(message, status);
+        error.getStatus?.() || error.code || HttpStatus.INTERNAL_SERVER_ERROR;
+
+      throw new HttpException(
+        {
+          status: 'error',
+          code: status,
+          message: error.message || 'Error interno al confirmar registro',
+        },
+        status,
+      );
     }
   }
+
 
 
   // =======================================================
@@ -344,38 +393,61 @@ export class AppController {
   // Crear compañía (solo SQL)
   @Post('enterprise/companyUser')
   async createEnterpriseCompany(@Body() body: any) {
-    const sqlCompany = await firstValueFrom(
-      this.JobsSQLClient.send({ cmd: 'create_company' }, body)
-    );
+    try {
+      const sqlCompany = await firstValueFrom(
+        this.JobsSQLClient.send({ cmd: 'create_company' }, body)
+      );
 
-    // ⚠️ Ya NO se envía nada a Mongo aquí.
-    // El evento 'enterprise_company_created' lo manejará automáticamente el servicio Mongo.
-
-    return { ...sqlCompany, message: 'Compañía creada correctamente' };
+      if (sqlCompany.status === 'error') {
+      throw new HttpException(sqlCompany.message, sqlCompany.code);
+      }
+    
+      return sqlCompany
+    } catch (error) { 
+      const status = error.getStatus ? error.getStatus() : error.code || HttpStatus.INTERNAL_SERVER_ERROR;
+      const message = error.message;
+      throw new HttpException(message, status);
+    }
   }
 
   // Crear empleo (solo SQL)
   @Post('enterprise/jobs')
   async createEnterpriseJob(@Body() body: any) {
-    const sqlJob = await firstValueFrom(
-      this.JobsSQLClient.send({ cmd: 'create_enterprise_job' }, body)
-    );
 
-    // ⚠️ Ya NO se manda manualmente a Mongo.
-    // El evento 'enterprise_job_created' será escuchado por el microservicio Mongo.
+    try{
+      const sqlJob = await firstValueFrom(
+        this.JobsSQLClient.send({ cmd: 'create_enterprise_job' }, body)
+      );
 
-    return { ...sqlJob, message: 'Empleo creado correctamente' };
+      if (sqlJob.status === 'error') {
+      throw new HttpException(sqlJob.message, sqlJob.code);
+      }
+      return sqlJob;
+    } catch (error) { 
+      const status = error.getStatus ? error.getStatus() : error.code || HttpStatus.INTERNAL_SERVER_ERROR;
+      const message = error.message;
+      throw new HttpException(message, status);
+    }
   }
 
   
 // actualizar detalle de empleo (Mongo)
   @Put('enterprise/job-details/:uuid')
   async updateJobDetail(@Param('uuid') uuid: string, @Body() body: any) {
-    const updatedDetail = await firstValueFrom(
-      this.JobsMongoClient.send({ cmd: 'update_job_detail' }, { uuid, updateData: body })
-    );
-    return updatedDetail;
+    try {
+      const updatedDetail = await firstValueFrom(
+        this.JobsMongoClient.send({ cmd: 'update_job_detail' }, { uuid, updateData: body })
+      );
+      if (updatedDetail.status === 'error') {
+        throw new HttpException(updatedDetail.message, updatedDetail.code);
+      }
+
+      return updatedDetail;
+    } catch (error) { 
+      const status = error.getStatus ? error.getStatus() : error.code || HttpStatus.INTERNAL_SERVER_ERROR;
+      const message = error.message;
+      throw new HttpException(message, status);
+    }
   }
 
 }
-

@@ -106,45 +106,69 @@ export class VerificationService {
   }
 
   // ================================================
-  // 🔹 Verificar OTP
-  // ================================================
-  async verifyOtp(code: string): Promise<ApiResponse> {
+// 🔹 Verificar OTP (mejorada con intentos y validación de correo)
+// ================================================
+  async verifyOtp(code: string, correo_electronico: string): Promise<ApiResponse> {
     try {
-      const entry = Array.from(this.otpStore.entries()).find(
-        ([, v]) => v.code === code,
-      );
+      // 1️⃣ Obtener OTP guardado por correo
+      const entry = this.otpStore.get(correo_electronico);
 
       if (!entry) {
-        console.log('❌ Código OTP incorrecto o no encontrado');
+        console.log('❌ No se encontró un OTP para este correo');
+        return {
+          status: 'error',
+          code: HttpStatus.NOT_FOUND,
+          message: 'No se encontró un OTP para este correo. Solicite uno nuevo.',
+        };
+      }
+
+      // 2️⃣ Registrar intentos (en memoria temporal)
+      if (!(entry as any).attempts) (entry as any).attempts = 0;
+      (entry as any).attempts++;
+
+      // 3️⃣ Si excede 3 intentos
+      if ((entry as any).attempts > 3) {
+        this.otpStore.delete(correo_electronico);
+        console.log(`🚫 OTP bloqueado para ${correo_electronico} por demasiados intentos`);
+        return {
+          status: 'error',
+          code: HttpStatus.TOO_MANY_REQUESTS, // 429
+          message: 'Has superado el número máximo de intentos (3). Solicita un nuevo OTP.',
+        };
+     }
+
+      // 4️⃣ Validar código
+      if (entry.code !== code) {
+        console.log(`❌ Código OTP incorrecto para ${correo_electronico} (intento ${(entry as any).attempts})`);
         return {
           status: 'error',
           code: HttpStatus.BAD_REQUEST,
-          message: 'Código OTP incorrecto o expirado',
+          message: `Código OTP incorrecto. Intento ${(entry as any).attempts} de 3.`,
         };
       }
 
-      const [target, data] = entry;
-
-      if (Date.now() > data.expiresAt) {
-        this.otpStore.delete(target);
-        console.log('⚠️ Código OTP expirado');
+      // 5️⃣ Verificar expiración
+      if (Date.now() > entry.expiresAt) {
+        this.otpStore.delete(correo_electronico);
+        console.log(`⚠️ Código OTP expirado para ${correo_electronico}`);
         return {
           status: 'error',
-          code: HttpStatus.GONE, // 410: recurso expirado
-          message: 'El código OTP ha expirado',
+          code: HttpStatus.GONE,
+          message: 'El código OTP ha expirado. Solicita uno nuevo.',
         };
       }
 
-      this.otpStore.delete(target);
-      console.log(`✅ OTP verificado correctamente para ${target}`);
+      // ✅ Si todo está bien
+      this.otpStore.delete(correo_electronico);
+      console.log(`✅ OTP verificado correctamente para ${correo_electronico}`);
 
       return {
         status: 'success',
         code: HttpStatus.OK,
-        message: 'Código OTP verificado correctamente',
-        data: { target, valid: true },
+        message: `OTP verificado correctamente para ${correo_electronico}`,
+        data: { correo_electronico, valid: true },
       };
-    } catch (error) {
+      }catch (error) {
       console.error('🔥 Error al verificar OTP:', error.message);
       return {
         status: 'error',
@@ -153,6 +177,7 @@ export class VerificationService {
       };
     }
   }
+
 
   // ================================================
   // 🔹 Plantilla HTML para el correo OTP

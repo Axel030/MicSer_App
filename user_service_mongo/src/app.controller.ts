@@ -27,9 +27,7 @@ export class AppController {
   }
 
   @MessagePattern({ cmd: 'update_profile_by_unique_id' })
-  async updateProfileByUniqueId(
-    @Payload() data: { id_unico: string; [key: string]: any },
-  ): Promise<ApiResponse<PerfilUsuario>> {
+  async updateProfileByUniqueId(@Payload() data: { id_unico: string; [key: string]: any },): Promise<ApiResponse<PerfilUsuario>> {
     return this.appService.updateProfileByUniqueId(data);
   }
 
@@ -37,4 +35,20 @@ export class AppController {
   async deleteProfileByUniqueId(@Payload() data: { id_unico: string }): Promise<ApiResponse> {
     return this.appService.deleteProfileByUniqueId(data.id_unico);
   }
+
+  // =========================
+  //      DOCUMENTOS USUARIO
+  // =========================
+
+  // Guardar/actualizar un documento
+  @MessagePattern({ cmd: 'docs.save_or_update' })
+  async saveOrUpdateDocument(@Payload() data: { id_unico: string; [key: string]: any },): Promise<ApiResponse> {
+    return this.appService.actualizarDocumentoURL(data);
+  }
+
+// Obtener todos los documentos de un usuario
+  @MessagePattern({ cmd: 'docs.get.all' },)async getDocuments(@Payload() data: { id_unico: string },): Promise<ApiResponse> {
+    return this.appService.getDocumentsByUniqueId(data.id_unico);
+  }
+  
 }
