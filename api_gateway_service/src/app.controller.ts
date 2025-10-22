@@ -1,7 +1,9 @@
 import { Controller, Get, Post, Put, Delete, Inject, Body, Param, HttpException, HttpStatus } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
-import { response } from 'express';
 import { firstValueFrom } from 'rxjs';
+import { CreateUserDto } from '../dto/create-user.dto';
+import { ConfirmRegisterDto } from '../dto/confirm-register.dto';
+
 
 @Controller()
 export class AppController {
@@ -14,6 +16,8 @@ export class AppController {
     @Inject('ENTERPRISE_JOBS_SQL') private readonly JobsSQLClient: ClientProxy,
     @Inject('ENTERPRISE_JOBS_MONGO') private readonly JobsMongoClient: ClientProxy,
   ) {}
+
+  
 
  // =========================
   //       LOGIN
@@ -50,7 +54,7 @@ export class AppController {
   // =========================
 
   @Post('users')
-  async createUser(@Body() body: any) {
+  async createUser(@Body() body: CreateUserDto) {
     try {
     const response = await firstValueFrom(this.Loginclient.send({ cmd: 'create_user' }, body));
     if (response.status === 'error') throw new HttpException(response.message, response.code);
@@ -275,7 +279,7 @@ export class AppController {
   // 🟦 INICIO DE REGISTRO
 
   @Post('register/init')
-  async registerInit(@Body() body: any) {
+  async registerInit(@Body() body: CreateUserDto) {
     try {
       const { correo_electronico } = body;
 
@@ -316,73 +320,82 @@ export class AppController {
   // 🟩 CONFIRMAR REGISTRO
 
   @Post('register/confirm')
-  async registerConfirm(@Body() body: { correo_electronico: string; code: string }) {
-    try {
-      // 1️⃣ Verificar OTP
-      const otpResponse = await firstValueFrom(
-        this.AuthClient.send({ cmd: 'verify_otp' }, { code: body.code , correo_electronico: body.correo_electronico }),
-      );
+async registerConfirm(@Body() body: ConfirmRegisterDto) {
+  try {
+    // 1️⃣ Verificar OTP
+    const otpResponse = await firstValueFrom(
+      this.AuthClient.send(
+        { cmd: 'verify_otp' },
+        { code: body.code, correo_electronico: body.correo_electronico },
+      ),
+    );
 
-      if (otpResponse.status === 'error') {
-        return {
-          status: 'error',
-          code: otpResponse.code || HttpStatus.BAD_REQUEST,
-          message: otpResponse.message,
-        };
-      }
-
-      // ✅ Respuesta individual del OTP (solo confirmación)
-      const otpResult = {
-        status: 'success',
-        code: HttpStatus.OK,
-        message: 'OTP verificado correctamente',
-      };
-
-      // 2️⃣ Recuperar datos temporales
-      const userData = this.tempUsers.get(body.correo_electronico);
-      if (!userData) {
-        return {
-          status: 'error',
-          code: HttpStatus.NOT_FOUND,
-          message: 'Datos de registro no encontrados o expirados',
-        };
-     }
-
-     //Para revisión de envio de datos del temporal al User_SERVICE_SQL
-     //console.log('🧩 userData recuperado de tempUsers:', userData); 
-      // 3️⃣ Crear usuario
-      const createdUser = await firstValueFrom(
-        this.Loginclient.send({ cmd: 'create_user' }, userData),
-      );
-
-      // 4️⃣ Eliminar datos temporales
-      this.tempUsers.delete(body.correo_electronico);
-
-      // ✅ Respuesta final del usuario
-      return {
-        otp: otpResult,
-        userCreation: {
-          status: createdUser.status || 'success',
-          code: createdUser.code || HttpStatus.CREATED,
-          message: createdUser.message || 'Usuario creado exitosamente',
-          data: createdUser.data || createdUser,
-        },
-      };
-
-    } catch (error) {
-      const status =
-        error.getStatus?.() || error.code || HttpStatus.INTERNAL_SERVER_ERROR;
-
+    // ⚠️ Si el OTP es incorrecto, expirado o se excedieron los intentos
+    if (otpResponse.status === 'error') {
       throw new HttpException(
         {
           status: 'error',
-          code: status,
-          message: error.message || 'Error interno al confirmar registro',
+          code: otpResponse.code || HttpStatus.BAD_REQUEST,
+          message: otpResponse.message,
         },
-        status,
+        otpResponse.code || HttpStatus.BAD_REQUEST,
       );
     }
+
+    // ✅ Respuesta individual del OTP (solo confirmación)
+    const otpResult = {
+      status: 'success',
+      code: HttpStatus.OK,
+      message: 'OTP verificado correctamente',
+    };
+
+    // 2️⃣ Recuperar datos temporales
+    const userData = this.tempUsers.get(body.correo_electronico);
+    if (!userData) {
+      throw new HttpException(
+        {
+          status: 'error',
+          code: HttpStatus.NOT_FOUND,
+          message: 'Datos de registro no encontrados o expirados',
+        },
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    // 3️⃣ Crear usuario
+    const createdUser = await firstValueFrom(
+      this.Loginclient.send({ cmd: 'create_user' }, userData),
+    );
+
+    // 4️⃣ Eliminar datos temporales
+    this.tempUsers.delete(body.correo_electronico);
+
+    // ✅ Respuesta final correcta
+    return {
+      status: 'success',
+      code: HttpStatus.CREATED,
+      message: 'Usuario creado exitosamente',
+      data: {
+        otp: otpResult,
+        user: createdUser.data || createdUser,
+      },
+    };
+  } catch (error) {
+    const status =
+      error.getStatus?.() || error.code || HttpStatus.INTERNAL_SERVER_ERROR;
+    const message = error.message || 'Error interno al confirmar registro';
+
+    throw new HttpException(
+      {
+        status: 'error',
+        code: status,
+        message,
+      },
+      status,
+    );
   }
+}
+
 
 
 
