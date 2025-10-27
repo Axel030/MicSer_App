@@ -5,6 +5,7 @@ import { Company } from './entities/company.entity';
 import { EnterpriseJob } from './entities/enterprise-job.entity';
 import { ClientProxy } from '@nestjs/microservices';
 import { ApiResponse } from './interfaces/api-response.interface';
+import { firstValueFrom } from 'rxjs';
 
 @Injectable()
 export class AppService {
@@ -94,4 +95,140 @@ export class AppService {
         };
     }
   }
+
+  // ===============================
+  //      BUSQUEDA DE TRABAJO
+  // ===============================
+  async findOne(options: any): Promise<EnterpriseJob | null> {
+    return this.jobRepo.findOne(options);
+  }
+
+  // ===============================
+  //      OBTENER EMPLEO Y COMPAÑÍA
+  // ===============================
+  async getJobAndCompany(uuid: string): Promise<ApiResponse> {
+    try {
+      const job = await this.jobRepo.find({ where: { uuid } });
+      if (!job)
+      {
+        console.log (`❌ Trabajo con ID ${uuid} no encontrado`);
+        return {
+          status : 'error',
+          code: HttpStatus.NOT_FOUND,
+          message: 'Trabajo no encontrado',
+        };
+      }
+
+      const profile= await firstValueFrom(
+        this.enterpriseJobsMongoClient.send({ cmd : 'get_job_by_uuid' }, {uuid : job[0].uuid})
+      );
+
+      return {
+        status: 'success',
+        code: HttpStatus.OK,
+        message: 'Trabajo y compañia obtenidos correctamente',
+        data: { job: job[0], profile  },
+      }
+    } catch (error) {
+      console.error('🔥 Error al obtener trabajo con compañia:', error);
+      return {
+        status: 'error',
+        code: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Error interno al obtener tabajo y compañia',
+      };
+    }
+  }
+
+
+  // ===============================
+  //   OBTENER TODOS LOS EMPLEOS ACTIVOS CON COMPAÑÍA Y DETALLES (SQL + Mongo)
+  // ===============================
+  async getAllActiveJobs(): Promise<ApiResponse> {
+  try {
+      // 1️⃣ Obtener todos los empleos publicados y visibles
+      const jobs = await this.jobRepo.find({
+        where: { status: 'published', visibility: true },
+        relations: ['company'], // incluye la relación con la empresa
+      });
+
+      if (!jobs.length) {
+        return {
+          status: 'success',
+          code: HttpStatus.OK,
+          message: 'No hay empleos activos disponibles',
+          data: [],
+        };
+      }
+
+      // 2️⃣ Para cada empleo, traer su detalle desde Mongo
+      const enrichedJobs = await Promise.all(
+        jobs.map(async (job) => {
+          try {
+            const profile = await firstValueFrom(
+              this.enterpriseJobsMongoClient.send(
+                { cmd: 'get_job_by_uuid' },
+                { uuid: job.uuid },
+              ),
+            );
+           return { ...job, details: profile?.data || null };
+          } catch (error) {
+            console.warn(`⚠️ No se pudo obtener detalles para el empleo ${job.uuid}`);
+            return { ...job, details: null };
+          }
+        }),
+      );
+
+      return {
+        status: 'success',
+        code: HttpStatus.OK,
+        message: 'Empleos activos obtenidos correctamente',
+        data: enrichedJobs,
+      };
+    } catch (error) {
+      console.error('🔥 Error al obtener empleos activos:', error);
+      return {
+        status: 'error',
+        code: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Error interno al obtener empleos activos',
+      };
+    }
+  }
+
+
+  async getJobsPreview(): Promise<ApiResponse> {
+  try {
+    const jobs = await this.jobRepo.find({
+      where: { status: 'published', visibility: true },
+      relations: ['company'],
+      select: {
+        id: true,
+        uuid: true,
+        title: true,
+        short_description: true,
+        category: true,
+        urgency: true,
+        job_type: true,
+        salary: true,
+        company: {
+          name: true
+        }
+      }
+    });
+
+    return {
+      status: 'success',
+      code: 200,
+      message: 'Vista previa de empleos obtenida correctamente',
+      data: jobs
+    };
+  } catch (error) {
+    console.error('❌ Error en getJobsPreview:', error);
+    return {
+      status: 'error',
+      code: 500,
+      message: 'Error al obtener vista previa de empleos'
+    };
+  }
+}
+
 }

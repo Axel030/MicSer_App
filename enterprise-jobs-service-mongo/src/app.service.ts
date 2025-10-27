@@ -73,4 +73,8 @@ export class AppService {
       }
     }
   }
+
+  async findByUuid(uuid: string) {
+    return await this.jobDetailModel.findOne({ uuid });
+  }
 }

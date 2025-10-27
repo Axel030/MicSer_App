@@ -59,6 +59,13 @@ export class EnterpriseJob {
   @Column({ type: 'boolean', default: true })
   visibility: boolean;
 
+  @Column({ type: 'timestamp', nullable: true })
+  start_at: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  end_at: Date;
+
+
   @CreateDateColumn()
   created_at: Date;
 

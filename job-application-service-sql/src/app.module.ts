@@ -1,16 +1,14 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ClientsModule, Transport } from '@nestjs/microservices';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { Usuario } from './entity/user.entity';
-import { ClientsModule, Transport } from '@nestjs/microservices';
+import { JobApplication } from './entity/job-application.entity';
 
 @Module({
   imports: [
-
-    ConfigModule.forRoot({ isGlobal: true }), // primero
+    ConfigModule.forRoot({ isGlobal: true }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -21,31 +19,32 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
         username: config.get<string>('DB_USER'),
         password: config.get<string>('DB_PASSWORD'),
         database: config.get<string>('DB_NAME'),
-        entities: [Usuario],
+        entities: [JobApplication],
         synchronize: false,
       }),
     }),
-    TypeOrmModule.forFeature([Usuario]),
+    TypeOrmModule.forFeature([JobApplication]),
 
-    JwtModule.registerAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET'),
-        signOptions: { expiresIn: '1h' },
-      }),
-    }),
-    // <-- Cliente RabbitMQ para emitir eventos
     ClientsModule.register([
       {
-        name: 'USER_SERVICE_MONGO',
+        name: 'JOB_APPLICATION_MONGO',
         transport: Transport.RMQ,
         options: {
           urls: ['amqp://localhost:5672'],
-          queue: 'user_created_queue',
+          queue: 'job_application_mongo_queue',
           queueOptions: { durable: true },
         },
       },
+      {
+        name: 'ENTERPRISE_JOBS_SQL',
+        transport: Transport.RMQ,
+        options: {
+          urls: ['amqp://localhost:5672'],
+          queue: 'enterprise_jobs_sql_queue',
+          queueOptions: { durable: true },
+        },
+      },
+
     ]),
   ],
   controllers: [AppController],

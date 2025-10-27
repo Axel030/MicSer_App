@@ -51,6 +51,25 @@ import { AppService } from './app.service';
       queueOptions: { durable: true },
     },
   },
+  {
+    name: 'JOB_APPLICATION_SQL',
+    transport: Transport.RMQ,
+    options: {
+      urls: ['amqp://localhost:5672'],
+      queue: 'job_application_sql_queue',
+      queueOptions: { durable: true },
+    },
+  },
+  {
+    name: 'JOB_APPLICATION_MONGO',
+    transport: Transport.RMQ,
+    options: {
+      urls: ['amqp://localhost:5672'],
+      queue: 'job_application_mongo_queue',
+      queueOptions: { durable: true },
+    },
+  },
+
 ]),
   ],
   controllers: [AppController],

@@ -24,5 +24,20 @@ export class AppController {
   async handleUpdateJobDetail(data: { uuid: string; updateData: any }): Promise<ApiResponse<EnterpriseJobDetail>> {
     return this.appService.updateJobDetail(data.uuid, data.updateData);
   }
+  
+  @MessagePattern({ cmd: 'get_job_by_uuid' })
+  async getJobByUuid(@Payload() data: { uuid: string }) {
+    try {
+      const job = await this.appService.findByUuid(data.uuid);
+      if (!job) {
+        return { status: 'error', code: 404, message: 'Trabajo no encontrado' };
+      }
+
+      return { status: 'success', code: 200, data: job };
+    } catch (error) {
+      console.error('❌ Error en get_job_by_uuid (Mongo):', error);
+      return { status: 'error', code: 500, message: 'Error interno en Mongo' };
+    }
+  }
 
 }
